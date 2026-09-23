@@ -3,6 +3,28 @@
 All notable changes to this plugin are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.2.1] - 2026-09-23
+
+### Fixed
+- Admin menu icon replaced (was an abstract stack-of-lines shape that
+  WordPress's forced monochrome rendering flattened into a generic-
+  looking placeholder glyph). Now a shield-with-checkmark, matching the
+  main dashboard's own "Security" icon and this plugin's trust framing.
+- Settings screen width was hard-capped at 960px, leaving a lot of dead
+  space on wide monitors. Now `min(1400px, 94vw)`.
+
+### Added
+- **Spike**: the settings screen's accent color now shifts to harmonize
+  with a site's chosen WordPress Admin Color Scheme (Users -> Profile),
+  but only for non-default schemes -- sites on the default "Fresh"
+  scheme (the large majority) keep the plugin's own distinctive
+  indigo/violet look unchanged, so the brand identity isn't diluted for
+  the common case. Curated accent values, not lifted directly from WP
+  core -- visually unverified against a live install for any scheme
+  other than the default. A few hardcoded glow-shadow colors (button
+  hover, code-chip hover border) were not migrated to the new accent
+  variables in this pass.
+
 ## [1.2.0] - 2026-09-23
 
 ### Added

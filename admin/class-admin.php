@@ -74,6 +74,30 @@ class AISEOC_Admin {
 
         $has_yoast = defined( 'WPSEO_VERSION' );
         $has_rankmath = defined( 'RANK_MATH_VERSION' );
+
+        // SPIKE (2026-09-23): only shift off our default brand accent when
+        // the site owner has deliberately picked a non-default WP admin
+        // color scheme -- keeps the distinctive dark/glass look for the
+        // common case (nearly everyone stays on "Fresh"), while giving a
+        // small thoughtful touch to anyone who's clearly customized their
+        // admin already. This is WP's own Admin Color Scheme setting
+        // (Users -> Profile), NOT the site's public-facing theme -- those
+        // are two separate things, see class docblock discussion.
+        // Curated, not lifted directly from WP core's own scheme hexes --
+        // several of those are too dark/muted to read as a glow/gradient
+        // against this UI's near-black background. Unverified visually
+        // against a live install for schemes other than the default.
+        $scheme_accents = [
+            'modern'    => [ '#3858e9', '#8b5cf6' ],
+            'blue'      => [ '#4796b3', '#06b6d4' ],
+            'coffee'    => [ '#c7a589', '#e0b088' ],
+            'ectoplasm' => [ '#a3b745', '#8b5cf6' ],
+            'midnight'  => [ '#e14d43', '#f97316' ],
+            'ocean'     => [ '#9ebaa0', '#5fa8d3' ],
+            'sunrise'   => [ '#dd823b', '#f59e0b' ],
+        ];
+        $admin_color = get_user_option( 'admin_color' );
+        [ $accent_1, $accent_2 ] = $scheme_accents[ $admin_color ] ?? [ '#6366f1', '#8b5cf6' ];
         ?>
         <div class="aiseoc-wrap">
         <?php
@@ -93,7 +117,15 @@ class AISEOC_Admin {
         <?php
     }
 
+    /**
+     * WordPress forces admin menu icons to render as a flat monochrome
+     * silhouette (it strips any embedded stroke/fill color) -- so this has
+     * to read clearly as a SHAPE alone, not rely on color. A shield with a
+     * checkmark, same icon language the main VtechSEO dashboard already
+     * uses for "Security," fits this plugin's trust-focused framing far
+     * better than an abstract line pattern.
+     */
     private static function get_icon_svg(): string {
-        return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="#a8a8ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2 4 5.5v6C4 16.5 7.4 20.7 12 22c4.6-1.3 8-5.5 8-10.5v-6L12 2Z" fill="#fff"/><path d="m8.5 12 2.2 2.2L15.5 9" stroke="#1e1e2e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     }
 }
