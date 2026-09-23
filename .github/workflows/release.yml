@@ -1,0 +1,52 @@
+name: Release AI SEO Connector plugin zip
+
+# Fires when a version tag like v1.0.0 is pushed to this repo (the
+# ai-seo-connector/ folder's own repo at
+# github.com/abhiraz7/AI-SEO-Connector -- this workflow lives inside the
+# plugin folder specifically so it ships as part of every release).
+#
+# Builds a plugin zip and attaches it to a new GitHub Release. The
+# vendored vendor/plugin-update-checker library (see ai-seo-connector.php) reads
+# that release to power WordPress's native "update available" notice, so
+# the zip's top-level folder name and internal layout must match what a
+# normal plugin install expects.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build plugin zip
+        run: |
+          # Zip the whole repo into a "ai-seo-connector/" top-level folder, the
+          # way a real plugin install expects, while excluding repo/dev-only
+          # files that have no business shipping to a client site.
+          #
+          # vendor/plugin-update-checker IS included on purpose -- PUC ships
+          # inside the plugin, it isn't a build-time-only dependency.
+          mkdir -p /tmp/build/ai-seo-connector
+          rsync -a ./ /tmp/build/ai-seo-connector/ \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude '.gitignore' \
+            --exclude '.gitattributes' \
+            --exclude 'composer.json' \
+            --exclude 'composer.lock' \
+            --exclude 'node_modules'
+          cd /tmp/build
+          zip -r "$GITHUB_WORKSPACE/ai-seo-connector.zip" ai-seo-connector
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ai-seo-connector.zip
+          generate_release_notes: true
