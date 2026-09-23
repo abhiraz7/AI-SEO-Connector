@@ -1,17 +1,20 @@
 <?php
 /**
  * Plugin Name: AI SEO Connector
- * Plugin URI:  https://vtraffic.in
+ * Plugin URI:  https://github.com/abhiraz7/AI-SEO-Connector
  * Description: Lets the VtechSEO platform read on-page SEO data and apply approved fixes (meta tags, image alt text, content) on this site. Scoped to content/SEO/media only -- no page-builder control, no plugin management, no raw PHP execution.
- * Version:     1.0.0
- * Author:      Vtechys
- * License:     GPL-2.0+
+ * Version:     1.2.2
+ * Requires at least: 5.6
+ * Requires PHP: 7.4
+ * Author:      AI SEO Connector
+ * Author URI:  https://github.com/abhiraz7/AI-SEO-Connector
+ * License:     Proprietary -- All Rights Reserved. See LICENSE.
  * Text Domain: ai-seo-connector
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'AISEOC_VERSION',    '1.0.0' );
+define( 'AISEOC_VERSION',    '1.2.2' );
 define( 'AISEOC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'AISEOC_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'AISEOC_SLUG',       'ai-seo-connector' );

@@ -1,5 +1,10 @@
 # AI SEO Connector
 
+[![Latest release](https://img.shields.io/github/v/release/abhiraz7/AI-SEO-Connector?label=latest%20release&sort=semver)](https://github.com/abhiraz7/AI-SEO-Connector/releases)
+[![License: Proprietary](https://img.shields.io/badge/license-proprietary-red.svg)](LICENSE)
+[![WordPress](https://img.shields.io/badge/WordPress-5.6%2B-21759b.svg)](https://wordpress.org)
+[![PHP](https://img.shields.io/badge/PHP-7.4%2B-777bb4.svg)](https://php.net)
+
 A WordPress plugin that lets the VtechSEO platform read on-page SEO data
 from your site and apply approved fixes -- meta tags, image alt text,
 and content -- without ever needing your WordPress login.
@@ -59,7 +64,7 @@ is scoped to exactly four categories, and nothing outside them:
 | Group | What it allows | What it explicitly does NOT include |
 |---|---|---|
 | **Content** | Create, update, or delete posts/pages; schedule publishing; set featured images; manage taxonomy terms | No page-builder (Elementor/Divi) access, no theme file editing |
-| **SEO** | Read/write Yoast SEO meta fields (title, description, focus keyword, canonical, OpenGraph, robots); run an SEO audit; ping search engines' sitemaps | No support (yet) for RankMath, AIOSEO, or SEOPress meta fields -- these are detected and reported, not written to |
+| **SEO** | Read/write SEO meta fields (title, description, focus keyword, canonical, OpenGraph, robots) for **Yoast SEO or RankMath**, whichever is active; run an SEO audit; ping search engines' sitemaps | No support (yet) for AIOSEO or SEOPress meta fields -- these are detected and reported, not written to |
 | **Media** | Upload/list/delete media library items; set or fix alt text -- either by attachment ID, or by the image's public URL for images (like a theme logo) that have no attachment ID visible in page HTML | No bulk media operations beyond what's listed |
 | **Site info** | Read-only: site name/URL/WordPress version/active theme/detected SEO plugin/content counts; list installed plugins (name, version, active/inactive) | **Cannot** install, activate, or deactivate any plugin; cannot switch themes; cannot read or write arbitrary `wp_options` (a fixed block-list always protects auth keys, this plugin's own token, and other sensitive options even from the one narrow read tool that exists) |
 
@@ -111,3 +116,15 @@ clicking "Regenerate" in the settings screen changes the token.
   IP) to slow down brute-force attempts against the token.
 - Every response is a clear success or a clear, specific error -- a
   fix that didn't apply never looks like one that did.
+
+## Releasing an update
+
+Tag a version on this repo (e.g. `git tag v1.1.0 && git push origin v1.1.0`)
+and the `.github/workflows/release.yml` workflow builds a clean plugin zip
+and attaches it to a GitHub Release automatically. Every site running this
+plugin checks for new releases here (via the vendored
+[Plugin Update Checker](https://github.com/YahnisElsts/plugin-update-checker)
+library) and shows WordPress's normal "update available" notice -- no
+manual redistribution needed. See "Does updating the plugin break my
+connection?" above: updates only ever replace files, never the stored
+connection/token.

@@ -23,11 +23,56 @@ class AISEOC_SEO {
         '_yoast_wpseo_primary_category',
     ];
 
-    /* ── Get all Yoast meta ──────────────────────────────── */
+    /* All known RankMath meta keys. Unlike Yoast, RankMath stores noindex/
+     * nofollow together in ONE array-valued meta key (rank_math_robots,
+     * e.g. ['noindex','nofollow']) rather than two separate scalar keys --
+     * get_meta()/set_meta() below translate that into the same noindex/
+     * nofollow friendly fields Yoast uses, so callers never need to know
+     * which SEO plugin is actually active. RankMath has no 1:1 equivalent
+     * of Yoast's schema_article_type/schema_page_type (its schema system
+     * is structured differently, under rank_math_snippet_* keys) -- those
+     * two friendly fields are simply absent/no-op under RankMath rather
+     * than guessed at.
+     */
+    const RANKMATH_KEYS = [
+        'rank_math_title',
+        'rank_math_description',
+        'rank_math_focus_keyword',
+        'rank_math_canonical_url',
+        'rank_math_facebook_title',
+        'rank_math_facebook_description',
+        'rank_math_facebook_image',
+        'rank_math_twitter_title',
+        'rank_math_twitter_description',
+        'rank_math_twitter_image',
+        'rank_math_robots',
+        'rank_math_pillar_content',
+        'rank_math_primary_category',
+    ];
+
+    /** Which SEO plugin's fields to read/write -- Yoast, RankMath, or
+     * neither active (falls back to Yoast's keys anyway so get/set never
+     * hard-fail, matching this handler's existing behavior before RankMath
+     * support existed). Checked live rather than cached, since a site
+     * could switch SEO plugins between calls. */
+    private static function active_provider(): string {
+        if ( defined( 'WPSEO_VERSION' ) ) return 'yoast';
+        if ( defined( 'RANK_MATH_VERSION' ) ) return 'rankmath';
+        return 'yoast';
+    }
+
+    /* ── Get all SEO meta (Yoast or RankMath, whichever is active) ──── */
     public static function get_meta( array $p ): array {
         $post_id = intval( $p['post_id'] ?? 0 );
         if ( ! $post_id ) throw new Exception( 'post_id required.' );
 
+        if ( self::active_provider() === 'rankmath' ) {
+            return self::get_meta_rankmath( $post_id );
+        }
+        return self::get_meta_yoast( $post_id );
+    }
+
+    private static function get_meta_yoast( int $post_id ): array {
         $meta = [];
         foreach ( self::YOAST_KEYS as $key ) {
             $meta[ $key ] = get_post_meta( $post_id, $key, true );
@@ -35,6 +80,7 @@ class AISEOC_SEO {
 
         return [
             'post_id'              => $post_id,
+            'seo_plugin'           => 'yoast',
             'seo_title'            => $meta['_yoast_wpseo_title'],
             'meta_description'     => $meta['_yoast_wpseo_metadesc'],
             'focus_keyword'        => $meta['_yoast_wpseo_focuskw'],
@@ -54,11 +100,48 @@ class AISEOC_SEO {
         ];
     }
 
-    /* ── Set Yoast meta ──────────────────────────────────── */
+    private static function get_meta_rankmath( int $post_id ): array {
+        $meta = [];
+        foreach ( self::RANKMATH_KEYS as $key ) {
+            $meta[ $key ] = get_post_meta( $post_id, $key, true );
+        }
+
+        $robots = is_array( $meta['rank_math_robots'] ) ? $meta['rank_math_robots'] : [];
+
+        return [
+            'post_id'              => $post_id,
+            'seo_plugin'           => 'rankmath',
+            'seo_title'            => $meta['rank_math_title'],
+            'meta_description'     => $meta['rank_math_description'],
+            'focus_keyword'        => $meta['rank_math_focus_keyword'],
+            'canonical_url'        => $meta['rank_math_canonical_url'],
+            'og_title'             => $meta['rank_math_facebook_title'],
+            'og_description'       => $meta['rank_math_facebook_description'],
+            'og_image'             => $meta['rank_math_facebook_image'],
+            'twitter_title'        => $meta['rank_math_twitter_title'],
+            'twitter_description'  => $meta['rank_math_twitter_description'],
+            'noindex'              => in_array( 'noindex', $robots, true ) ? '1' : '',
+            'nofollow'             => in_array( 'nofollow', $robots, true ) ? '1' : '',
+            'is_cornerstone'       => $meta['rank_math_pillar_content'],
+            'schema_article_type'  => '', // No 1:1 RankMath equivalent -- see class docblock above.
+            'schema_page_type'     => '',
+            'primary_category'     => $meta['rank_math_primary_category'],
+            'raw'                  => $meta,
+        ];
+    }
+
+    /* ── Set SEO meta (Yoast or RankMath, whichever is active) ──────── */
     public static function set_meta( array $p ): array {
         $post_id = intval( $p['post_id'] ?? 0 );
         if ( ! $post_id ) throw new Exception( 'post_id required.' );
 
+        if ( self::active_provider() === 'rankmath' ) {
+            return self::set_meta_rankmath( $post_id, $p );
+        }
+        return self::set_meta_yoast( $post_id, $p );
+    }
+
+    private static function set_meta_yoast( int $post_id, array $p ): array {
         $map = [
             'seo_title'            => '_yoast_wpseo_title',
             'meta_description'     => '_yoast_wpseo_metadesc',
@@ -96,7 +179,64 @@ class AISEOC_SEO {
         }
 
         AISEOC_Logger::log( 'info', "Updated Yoast SEO meta on post #{$post_id}: " . implode( ', ', $updated ) );
-        return [ 'post_id' => $post_id, 'updated_fields' => $updated ];
+        return [ 'post_id' => $post_id, 'seo_plugin' => 'yoast', 'updated_fields' => $updated ];
+    }
+
+    private static function set_meta_rankmath( int $post_id, array $p ): array {
+        $map = [
+            'seo_title'            => 'rank_math_title',
+            'meta_description'     => 'rank_math_description',
+            'focus_keyword'        => 'rank_math_focus_keyword',
+            'canonical_url'        => 'rank_math_canonical_url',
+            'og_title'             => 'rank_math_facebook_title',
+            'og_description'       => 'rank_math_facebook_description',
+            'og_image'             => 'rank_math_facebook_image',
+            'twitter_title'        => 'rank_math_twitter_title',
+            'twitter_description'  => 'rank_math_twitter_description',
+            'twitter_image'        => 'rank_math_twitter_image',
+            'is_cornerstone'       => 'rank_math_pillar_content',
+            'primary_category'     => 'rank_math_primary_category',
+        ];
+
+        $updated = [];
+        foreach ( $map as $friendly => $meta_key ) {
+            if ( isset( $p[ $friendly ] ) ) {
+                update_post_meta( $post_id, $meta_key, $p[ $friendly ] );
+                $updated[] = $friendly;
+            }
+        }
+
+        // noindex/nofollow: merge into RankMath's single rank_math_robots
+        // array rather than overwriting it, so setting noindex doesn't
+        // silently clear an existing nofollow (or vice versa).
+        if ( isset( $p['noindex'] ) || isset( $p['nofollow'] ) ) {
+            $robots = get_post_meta( $post_id, 'rank_math_robots', true );
+            $robots = is_array( $robots ) ? $robots : [];
+
+            foreach ( [ 'noindex', 'nofollow' ] as $flag ) {
+                if ( ! isset( $p[ $flag ] ) ) continue;
+                $has = in_array( $flag, $robots, true );
+                if ( $p[ $flag ] && ! $has ) {
+                    $robots[] = $flag;
+                } elseif ( ! $p[ $flag ] && $has ) {
+                    $robots = array_values( array_diff( $robots, [ $flag ] ) );
+                }
+                $updated[] = $flag;
+            }
+            update_post_meta( $post_id, 'rank_math_robots', $robots );
+        }
+
+        if ( ! empty( $p['raw'] ) && is_array( $p['raw'] ) ) {
+            foreach ( $p['raw'] as $key => $value ) {
+                if ( strpos( $key, 'rank_math_' ) === 0 ) {
+                    update_post_meta( $post_id, $key, $value );
+                    $updated[] = $key;
+                }
+            }
+        }
+
+        AISEOC_Logger::log( 'info', "Updated RankMath SEO meta on post #{$post_id}: " . implode( ', ', $updated ) );
+        return [ 'post_id' => $post_id, 'seo_plugin' => 'rankmath', 'updated_fields' => $updated ];
     }
 
     /* ── Audit post SEO ──────────────────────────────────── */

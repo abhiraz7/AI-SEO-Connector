@@ -50,14 +50,16 @@ foreach ( $logs as $entry ) {
 
   .aiseoc-wrap{
     position:relative;
-    max-width:960px;margin:24px auto;
+    --aiseoc-accent:<?php echo esc_attr( $accent_1 ); ?>;
+    --aiseoc-accent-2:<?php echo esc_attr( $accent_2 ); ?>;
+    max-width:min(1400px, 94vw);margin:24px auto;
     padding:36px 32px 44px;
     border-radius:22px;
     color:#e7e7ee;
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
     background:
-      radial-gradient(circle at 12% 12%, rgba(99,102,241,.22), transparent 42%),
-      radial-gradient(circle at 88% 8%, rgba(139,92,246,.20), transparent 38%),
+      radial-gradient(circle at 12% 12%, color-mix(in srgb, var(--aiseoc-accent) 55%, transparent), transparent 42%),
+      radial-gradient(circle at 88% 8%, color-mix(in srgb, var(--aiseoc-accent-2) 50%, transparent), transparent 38%),
       radial-gradient(circle at 50% 95%, rgba(16,185,129,.14), transparent 45%),
       #0a0a10;
     background-size:220% 220%,220% 220%,220% 220%,auto;
@@ -87,7 +89,7 @@ foreach ( $logs as $entry ) {
   }
   .aiseoc-card::before{
     content:'';position:absolute;top:0;left:0;right:0;height:2px;
-    background:linear-gradient(90deg,#6366f1,#8b5cf6,#06b6d4);opacity:.55;
+    background:linear-gradient(90deg,var(--aiseoc-accent),var(--aiseoc-accent-2),#06b6d4);opacity:.55;
   }
   .aiseoc-card:hover{
     transform:translateY(-2px);
@@ -100,7 +102,7 @@ foreach ( $logs as $entry ) {
   }
   .aiseoc-card h2::before{
     content:'';width:6px;height:6px;border-radius:50%;flex:none;
-    background:linear-gradient(135deg,#6366f1,#8b5cf6);
+    background:linear-gradient(135deg,var(--aiseoc-accent),var(--aiseoc-accent-2));
     box-shadow:0 0 10px rgba(139,92,246,.85);
   }
 
@@ -114,7 +116,7 @@ foreach ( $logs as $entry ) {
   .aiseoc-code:hover{border-color:rgba(139,92,246,.4)}
 
   .aiseoc-btn{
-    background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%);
+    background:linear-gradient(135deg,var(--aiseoc-accent) 0%,var(--aiseoc-accent-2) 100%);
     color:#fff;border:none;border-radius:8px;padding:9px 16px;
     font-size:12.5px;font-weight:600;cursor:pointer;letter-spacing:.01em;
     box-shadow:0 4px 16px rgba(99,102,241,.35);
@@ -137,7 +139,7 @@ foreach ( $logs as $entry ) {
   .aiseoc-group:last-child{border-bottom:none}
   .aiseoc-group label{font-weight:600;color:#fff;font-size:13px}
   .aiseoc-group p{margin:3px 0 0;color:#9a9aa8;font-size:12px;line-height:1.5}
-  .aiseoc-group input[type="checkbox"]{accent-color:#8b5cf6}
+  .aiseoc-group input[type="checkbox"]{accent-color:var(--aiseoc-accent-2)}
 
   .aiseoc-log{max-height:260px;overflow-y:auto;font-family:ui-monospace,monospace;font-size:11.5px}
   .aiseoc-log-row{display:flex;gap:10px;padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.05);border-radius:6px;transition:background .15s ease}
@@ -219,7 +221,7 @@ foreach ( $logs as $entry ) {
     </div>
   <?php endforeach; ?>
   <p style="font-size:11.5px;color:#7a7a85;margin:10px 0 0">
-    Detected SEO plugin: <strong style="color:#c8c8d0"><?php echo $has_yoast ? 'Yoast SEO' : ( $has_rankmath ? 'RankMath (not yet supported by this plugin\'s SEO tools)' : 'none detected' ); ?></strong>
+    Detected SEO plugin: <strong style="color:#c8c8d0"><?php echo $has_yoast ? 'Yoast SEO' : ( $has_rankmath ? 'RankMath' : 'none detected' ); ?></strong>
   </p>
   <button class="aiseoc-btn" id="aiseoc-save" style="margin-top:12px">Save settings</button>
 </div>

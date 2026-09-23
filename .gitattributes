@@ -1,0 +1,6 @@
+# Normalize line endings so Windows/Unix contributors don't fight CRLF/LF diffs.
+* text=auto eol=lf
+
+# Keep GitHub's language stats reflecting this plugin's own PHP, not the
+# vendored third-party update-checker library.
+vendor/plugin-update-checker/** linguist-vendored
