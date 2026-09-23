@@ -1,5 +1,10 @@
 # AI SEO Connector
 
+[![Latest release](https://img.shields.io/github/v/release/abhiraz7/AI-SEO-Connector?label=latest%20release&sort=semver)](https://github.com/abhiraz7/AI-SEO-Connector/releases)
+[![License: GPL v2+](https://img.shields.io/badge/license-GPL--2.0%2B-blue.svg)](LICENSE)
+[![WordPress](https://img.shields.io/badge/WordPress-5.6%2B-21759b.svg)](https://wordpress.org)
+[![PHP](https://img.shields.io/badge/PHP-7.4%2B-777bb4.svg)](https://php.net)
+
 A WordPress plugin that lets the VtechSEO platform read on-page SEO data
 from your site and apply approved fixes -- meta tags, image alt text,
 and content -- without ever needing your WordPress login.
@@ -111,3 +116,15 @@ clicking "Regenerate" in the settings screen changes the token.
   IP) to slow down brute-force attempts against the token.
 - Every response is a clear success or a clear, specific error -- a
   fix that didn't apply never looks like one that did.
+
+## Releasing an update
+
+Tag a version on this repo (e.g. `git tag v1.1.0 && git push origin v1.1.0`)
+and the `.github/workflows/release.yml` workflow builds a clean plugin zip
+and attaches it to a GitHub Release automatically. Every site running this
+plugin checks for new releases here (via the vendored
+[Plugin Update Checker](https://github.com/YahnisElsts/plugin-update-checker)
+library) and shows WordPress's normal "update available" notice -- no
+manual redistribution needed. See "Does updating the plugin break my
+connection?" above: updates only ever replace files, never the stored
+connection/token.
