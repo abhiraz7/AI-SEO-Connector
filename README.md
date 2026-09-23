@@ -128,3 +128,12 @@ library) and shows WordPress's normal "update available" notice -- no
 manual redistribution needed. See "Does updating the plugin break my
 connection?" above: updates only ever replace files, never the stored
 connection/token.
+
+## Built with AI assistance
+
+Fitting for a product called AI SEO Connector: this plugin's rename,
+trust-focused UI redesign, and GitHub-based auto-update wiring were built
+with Claude Code, under human review at every step -- every architectural
+decision (backward-compat handling for already-connected sites, the
+scoped tool-group permission model, what does and doesn't get automated)
+was made and verified by a human before shipping.
