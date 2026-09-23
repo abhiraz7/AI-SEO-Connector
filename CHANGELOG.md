@@ -3,6 +3,19 @@
 All notable changes to this plugin are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.2.2] - 2026-09-23
+
+### Changed
+- **License changed from GPL-2.0+ to Proprietary / All Rights Reserved.**
+  The GPL header was inherited from before this plugin's rename and had
+  never been deliberately chosen -- reconsidered and switched, matching
+  the main platform's own licensing. Note: this plugin is built entirely
+  on WordPress core's own hooks/APIs, which are themselves GPLv2 --
+  WordPress ecosystem convention treats plugins built this way as
+  derivative works expected to be GPL-compatible, so a fully proprietary
+  license here is a deliberate, accepted departure from that norm, not
+  an oversight.
+
 ## [1.2.1] - 2026-09-23
 
 ### Fixed

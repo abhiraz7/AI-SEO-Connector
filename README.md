@@ -1,7 +1,7 @@
 # AI SEO Connector
 
 [![Latest release](https://img.shields.io/github/v/release/abhiraz7/AI-SEO-Connector?label=latest%20release&sort=semver)](https://github.com/abhiraz7/AI-SEO-Connector/releases)
-[![License: GPL v2+](https://img.shields.io/badge/license-GPL--2.0%2B-blue.svg)](LICENSE)
+[![License: Proprietary](https://img.shields.io/badge/license-proprietary-red.svg)](LICENSE)
 [![WordPress](https://img.shields.io/badge/WordPress-5.6%2B-21759b.svg)](https://wordpress.org)
 [![PHP](https://img.shields.io/badge/PHP-7.4%2B-777bb4.svg)](https://php.net)
 
