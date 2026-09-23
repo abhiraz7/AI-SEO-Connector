@@ -219,7 +219,7 @@ foreach ( $logs as $entry ) {
     </div>
   <?php endforeach; ?>
   <p style="font-size:11.5px;color:#7a7a85;margin:10px 0 0">
-    Detected SEO plugin: <strong style="color:#c8c8d0"><?php echo $has_yoast ? 'Yoast SEO' : ( $has_rankmath ? 'RankMath (not yet supported by this plugin\'s SEO tools)' : 'none detected' ); ?></strong>
+    Detected SEO plugin: <strong style="color:#c8c8d0"><?php echo $has_yoast ? 'Yoast SEO' : ( $has_rankmath ? 'RankMath' : 'none detected' ); ?></strong>
   </p>
   <button class="aiseoc-btn" id="aiseoc-save" style="margin-top:12px">Save settings</button>
 </div>

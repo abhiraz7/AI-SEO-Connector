@@ -64,7 +64,7 @@ is scoped to exactly four categories, and nothing outside them:
 | Group | What it allows | What it explicitly does NOT include |
 |---|---|---|
 | **Content** | Create, update, or delete posts/pages; schedule publishing; set featured images; manage taxonomy terms | No page-builder (Elementor/Divi) access, no theme file editing |
-| **SEO** | Read/write Yoast SEO meta fields (title, description, focus keyword, canonical, OpenGraph, robots); run an SEO audit; ping search engines' sitemaps | No support (yet) for RankMath, AIOSEO, or SEOPress meta fields -- these are detected and reported, not written to |
+| **SEO** | Read/write SEO meta fields (title, description, focus keyword, canonical, OpenGraph, robots) for **Yoast SEO or RankMath**, whichever is active; run an SEO audit; ping search engines' sitemaps | No support (yet) for AIOSEO or SEOPress meta fields -- these are detected and reported, not written to |
 | **Media** | Upload/list/delete media library items; set or fix alt text -- either by attachment ID, or by the image's public URL for images (like a theme logo) that have no attachment ID visible in page HTML | No bulk media operations beyond what's listed |
 | **Site info** | Read-only: site name/URL/WordPress version/active theme/detected SEO plugin/content counts; list installed plugins (name, version, active/inactive) | **Cannot** install, activate, or deactivate any plugin; cannot switch themes; cannot read or write arbitrary `wp_options` (a fixed block-list always protects auth keys, this plugin's own token, and other sensitive options even from the one narrow read tool that exists) |
 
@@ -128,12 +128,3 @@ library) and shows WordPress's normal "update available" notice -- no
 manual redistribution needed. See "Does updating the plugin break my
 connection?" above: updates only ever replace files, never the stored
 connection/token.
-
-## Built with AI assistance
-
-Fitting for a product called AI SEO Connector: this plugin's rename,
-trust-focused UI redesign, and GitHub-based auto-update wiring were built
-with Claude Code, under human review at every step -- every architectural
-decision (backward-compat handling for already-connected sites, the
-scoped tool-group permission model, what does and doesn't get automated)
-was made and verified by a human before shipping.
