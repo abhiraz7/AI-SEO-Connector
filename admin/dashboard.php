@@ -14,7 +14,7 @@ $groups = [
     'content' => [ 'label' => 'Content',   'desc' => 'Create, update and delete posts &amp; pages, featured images, taxonomies.' ],
     'seo'     => [ 'label' => 'SEO',       'desc' => 'Read and write Yoast or RankMath meta, run audits, ping sitemaps.' ],
     'media'   => [ 'label' => 'Media',     'desc' => 'Upload, list and delete media; fix alt text by ID or URL.' ],
-    'site'    => [ 'label' => 'Site info', 'desc' => 'Read site, plugin and selected option info; flush the object cache. No installs, no user or option writes.' ],
+    'site'    => [ 'label' => 'Site info', 'desc' => 'Read site, plugin and a few site settings; clear caches. No installs, no user or option writes.' ],
 ];
 
 /**

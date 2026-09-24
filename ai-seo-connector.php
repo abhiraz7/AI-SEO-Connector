@@ -55,16 +55,7 @@ require_once AISEOC_PLUGIN_DIR . 'admin/class-admin.php';
  * cycle -- are not guaranteed to fire the activation hook first).
  */
 function aiseoc_migrate_legacy_options(): void {
-    $map = [
-        'vtseo_api_token'      => 'aiseoc_api_token',
-        'vtseo_enabled'        => 'aiseoc_enabled',
-        'vtseo_log_level'      => 'aiseoc_log_level',
-        'vtseo_allowed_actions'=> 'aiseoc_allowed_actions',
-        'vtseo_app_username'   => 'aiseoc_app_username',
-        // Activity log isn't part of auth/connection state, but carrying it
-        // over avoids a client seeing their history vanish for no reason.
-        'vtseo_activity_log'   => 'aiseoc_activity_log',
-    ];
+    $map = require AISEOC_PLUGIN_DIR . 'includes/legacy-options.php';
 
     foreach ( $map as $old_key => $new_key ) {
         // Use a strict false/'' check here rather than empty() -- 'aiseoc_enabled'
