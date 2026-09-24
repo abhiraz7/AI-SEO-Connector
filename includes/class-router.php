@@ -4,6 +4,9 @@
  * (plus a compatibility alias for connections made by earlier releases --
  * see register_routes() below).
  */
+/** A tool call refused because its group is switched off in settings. */
+class AISEOC_Group_Disabled extends RuntimeException {}
+
 class AISEOC_Router {
 
     const NS = 'aiseoc/v1';
@@ -99,8 +102,9 @@ class AISEOC_Router {
     /** Central dispatcher — receives { tool, params } */
     public static function dispatch_tool( WP_REST_Request $request ): WP_REST_Response {
         $body    = $request->get_json_params();
+        $body    = is_array( $body ) ? $body : [];
         $tool    = sanitize_key( $body['tool'] ?? '' );
-        $params  = $body['params'] ?? [];
+        $params  = is_array( $body['params'] ?? null ) ? $body['params'] : [];
         $allowed = self::allowed_groups();
 
         AISEOC_Logger::log( 'info', "Tool called: {$tool}" );
@@ -108,14 +112,31 @@ class AISEOC_Router {
         try {
             $result = self::call_tool( $tool, $params, $allowed );
             return new WP_REST_Response( [ 'success' => true, 'result' => $result ] );
-        } catch ( InvalidArgumentException $e ) {
+        } catch ( Throwable $e ) {
             AISEOC_Logger::log( 'error', "Tool {$tool} error: " . $e->getMessage() );
-            return new WP_REST_Response( [ 'success' => false, 'error' => $e->getMessage() ], 400 );
-        } catch ( Exception $e ) {
-            AISEOC_Logger::log( 'error', "Tool {$tool} error: " . $e->getMessage() );
-            // Return a generic message to avoid leaking internal paths/table names.
-            return new WP_REST_Response( [ 'success' => false, 'error' => 'Tool execution failed. Check activity log for details.' ], 500 );
+            [ $status, $message ] = self::describe_error( $e );
+            return new WP_REST_Response( [ 'success' => false, 'error' => $message ], $status );
         }
+    }
+
+    /**
+     * Turn an exception into [ HTTP status, message safe to show the caller ].
+     *
+     * Problems the caller can act on -- bad input, a missing post, a
+     * disabled tool group -- get their real message with a 400/403. Anything
+     * else (a WordPress or PHP failure) gets a generic 500, because those
+     * messages can contain file paths or table names; the real text is
+     * still written to the activity log. Used by /tool and MCP tools/call
+     * so both entry points answer the same way.
+     */
+    public static function describe_error( Throwable $e ): array {
+        if ( $e instanceof AISEOC_Group_Disabled ) {
+            return [ 403, $e->getMessage() ];
+        }
+        if ( $e instanceof InvalidArgumentException ) {
+            return [ 400, $e->getMessage() ];
+        }
+        return [ 500, 'Tool execution failed. Check the activity log for details.' ];
     }
 
     /**
@@ -133,7 +154,7 @@ class AISEOC_Router {
 
         if ( ! in_array( $group, $allowed, true ) ) {
             AISEOC_Logger::log( 'warn', "Blocked tool '{$tool}' — group '{$group}' not in allowed_actions." );
-            throw new RuntimeException( "Tool group '{$group}' is disabled. Enable it in AI SEO Connector settings." );
+            throw new AISEOC_Group_Disabled( "Tool group '{$group}' is disabled. Enable it in AI SEO Connector settings." );
         }
 
         return call_user_func( [ $class, $method ], $params );
@@ -185,8 +206,8 @@ class AISEOC_Router {
             [ 'name' => 'assign_terms',           'group' => 'content', 'description' => 'Add/set/remove taxonomy terms on a post.' ],
 
             /* ── SEO ── */
-            [ 'name' => 'yoast_get_meta',         'group' => 'seo', 'description' => 'Get all Yoast SEO meta for a post.' ],
-            [ 'name' => 'yoast_set_meta',         'group' => 'seo', 'description' => 'Set Yoast SEO meta (title, description, robots, og, canonical, schema).' ],
+            [ 'name' => 'yoast_get_meta',         'group' => 'seo', 'description' => 'Get all SEO meta for a post from whichever SEO plugin is active (Yoast SEO or RankMath).' ],
+            [ 'name' => 'yoast_set_meta',         'group' => 'seo', 'description' => 'Set SEO meta (title, description, robots, og, canonical, schema) on whichever SEO plugin is active (Yoast SEO or RankMath).' ],
             [ 'name' => 'yoast_audit',            'group' => 'seo', 'description' => 'Run a readability/keyword audit and return recommendations.' ],
             [ 'name' => 'yoast_sitemap_ping',     'group' => 'seo', 'description' => 'Ping search engines with updated sitemap.' ],
 

@@ -64,7 +64,7 @@ class AISEOC_SEO {
     /* ── Get all SEO meta (Yoast or RankMath, whichever is active) ──── */
     public static function get_meta( array $p ): array {
         $post_id = intval( $p['post_id'] ?? 0 );
-        if ( ! $post_id ) throw new Exception( 'post_id required.' );
+        if ( ! $post_id ) throw new InvalidArgumentException( 'post_id required.' );
 
         if ( self::active_provider() === 'rankmath' ) {
             return self::get_meta_rankmath( $post_id );
@@ -133,7 +133,7 @@ class AISEOC_SEO {
     /* ── Set SEO meta (Yoast or RankMath, whichever is active) ──────── */
     public static function set_meta( array $p ): array {
         $post_id = intval( $p['post_id'] ?? 0 );
-        if ( ! $post_id ) throw new Exception( 'post_id required.' );
+        if ( ! $post_id ) throw new InvalidArgumentException( 'post_id required.' );
 
         $result = self::active_provider() === 'rankmath'
             ? self::set_meta_rankmath( $post_id, $p )
@@ -246,7 +246,7 @@ class AISEOC_SEO {
     /* ── Audit post SEO ──────────────────────────────────── */
     public static function audit_post( array $p ): array {
         $post_id = intval( $p['post_id'] ?? 0 );
-        if ( ! $post_id ) throw new Exception( 'post_id required.' );
+        if ( ! $post_id ) throw new InvalidArgumentException( 'post_id required.' );
 
         $post   = get_post( $post_id );
         $meta   = self::get_meta( $p );

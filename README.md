@@ -80,10 +80,12 @@ self-test is not counted as your platform connecting.
 - **Turn off specific capabilities**: the four tool groups (Content, SEO,
   Media, Site info) can each be switched off independently. Only need SEO
   fixes applied, nothing else? Turn off Content and Media.
-- **Uninstall**: deactivate and delete the plugin like any other. Its
-  settings stay in your database, so reinstalling reconnects without
-  re-pasting the token; regenerate the token first if you want the old one
-  to stop working for good.
+- **Uninstall**: deactivate and delete the plugin like any other.
+  Deleting it removes the API token, settings, activity log, connection
+  status and any Application Password it created, so nothing is left
+  behind. Deactivating on its own keeps them, so you can reactivate
+  without re-pasting the token. (Updating the plugin never removes
+  anything.)
 - **See everything it's done**: the "Recent activity" log on the settings
   screen records every tool call made through this connection, with a
   timestamp, so nothing happens invisibly. Rejected connection attempts
@@ -99,7 +101,7 @@ is scoped to exactly four categories, and nothing outside them:
 | **Content** | Create, update, or delete posts/pages; schedule publishing; set featured images; manage taxonomy terms | No page-builder (Elementor/Divi) access, no theme file editing |
 | **SEO** | Read/write SEO meta fields (title, description, focus keyword, canonical, OpenGraph, robots) for **Yoast SEO or RankMath**, whichever is active; run an SEO audit; ping search engines' sitemaps | No support (yet) for AIOSEO or SEOPress meta fields -- these are detected and reported, not written to |
 | **Media** | Upload/list/delete media library items; set or fix alt text -- either by attachment ID, or by the image's public URL for images (like a theme logo) that have no attachment ID visible in page HTML | No bulk media operations beyond what's listed |
-| **Site info** | Read site name/URL/WordPress version/active theme/detected SEO plugin/content counts; list installed plugins (name, version, active/inactive); read a small set of site options; flush the object cache | **Cannot** install, activate, or deactivate any plugin; cannot switch themes; never writes options or users. Option reads skip a fixed block-list of sensitive keys (auth keys and salts, this plugin's own token, and more) |
+| **Site info** | Read site name/URL/WordPress version/active theme/detected SEO plugin/content counts; list installed plugins (name, version, active/inactive); read a short list of site settings (homepage setup, site name, permalinks); clear the object cache and supported page caches | **Cannot** install, activate, or deactivate any plugin; cannot switch themes; never writes options or users. Option reads are limited to a short fixed list of site settings; every other option (passwords, API keys, other plugins' settings) is refused |
 
 **There is no PHP execution tool, no arbitrary database query tool, no
 user-management tool, and no site-wide search-and-replace tool in this

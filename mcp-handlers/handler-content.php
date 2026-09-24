@@ -79,7 +79,7 @@ class AISEOC_Content {
     /* ── Update post ─────────────────────────────────────── */
     public static function update_post( array $p ): array {
         $post_id = intval( $p['post_id'] ?? 0 );
-        if ( ! $post_id ) throw new Exception( 'post_id required.' );
+        if ( ! $post_id ) throw new InvalidArgumentException( 'post_id required.' );
         self::require_post( $post_id );
 
         $meta = self::checked_meta( $p['meta'] ?? [] );
@@ -199,7 +199,7 @@ class AISEOC_Content {
     public static function schedule_post( array $p ): array {
         $post_id = intval( $p['post_id'] ?? 0 );
         $date    = sanitize_text_field( $p['date'] ?? '' );
-        if ( ! $post_id || ! $date ) throw new Exception( 'post_id and date required.' );
+        if ( ! $post_id || ! $date ) throw new InvalidArgumentException( 'post_id and date required.' );
         self::require_post( $post_id );
 
         $result = self::save_post( [
@@ -221,7 +221,7 @@ class AISEOC_Content {
     public static function set_featured_image( array $p ): array {
         $post_id  = intval( $p['post_id'] ?? 0 );
         $media_id = intval( $p['media_id'] ?? 0 );
-        if ( ! $post_id ) throw new Exception( 'post_id required.' );
+        if ( ! $post_id ) throw new InvalidArgumentException( 'post_id required.' );
         self::require_post( $post_id );
 
         if ( $media_id ) {

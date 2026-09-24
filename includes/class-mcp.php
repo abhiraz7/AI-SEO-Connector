@@ -234,7 +234,7 @@ class AISEOC_MCP {
         } catch ( Throwable $e ) {
             AISEOC_Logger::log( 'error', "MCP tools/call '{$name}': " . $e->getMessage() );
             return self::make_result( $id, [
-                'content' => [ [ 'type' => 'text', 'text' => $e->getMessage() ] ],
+                'content' => [ [ 'type' => 'text', 'text' => AISEOC_Router::describe_error( $e )[1] ] ],
                 'isError' => true,
             ] );
         }
@@ -399,7 +399,7 @@ class AISEOC_MCP {
         return self::make_result( $id, [ 'prompts' => [
             [
                 'name'        => 'seo_blog_post',
-                'description' => 'Create a fully SEO-optimised blog post with Yoast meta, featured image, and publish',
+                'description' => 'Create a fully SEO-optimised blog post with SEO meta (Yoast or RankMath), featured image, and publish',
                 'arguments'   => [
                     [ 'name' => 'topic',      'description' => 'Blog post topic',       'required' => true  ],
                     [ 'name' => 'keyword',    'description' => 'Primary focus keyword', 'required' => true  ],
@@ -498,8 +498,8 @@ Steps:
         $theme = wp_get_theme()->get( 'Name' );
         $parts = [ "Connected to WordPress \"{$name}\" at {$url} (WP {$ver}, theme: {$theme})." ];
 
-        if ( defined( 'WPSEO_VERSION' ) )     $parts[] = 'Yoast SEO active.';
-        if ( defined( 'RANK_MATH_VERSION' ) ) $parts[] = 'RankMath active (this plugin only reads/writes Yoast meta keys today -- RankMath fields are not yet supported).';
+        if ( defined( 'WPSEO_VERSION' ) )     $parts[] = 'Yoast SEO active (SEO meta is read and written through Yoast).';
+        if ( defined( 'RANK_MATH_VERSION' ) ) $parts[] = 'RankMath active (SEO meta is read and written through RankMath).';
 
         $allowed = AISEOC_Router::allowed_groups();
         $parts[] = 'Enabled groups: ' . implode( ', ', $allowed ) . '.';
@@ -600,8 +600,8 @@ Steps:
             ], [ 'post_id' ] ),
 
             /* ── SEO ── */
-            self::tool( 'yoast_get_meta', 'Get all Yoast SEO meta for a post.', [ 'post_id' => self::i( 'Post ID.' ) ], [ 'post_id' ] ),
-            self::tool( 'yoast_set_meta', 'Set Yoast SEO meta (title, description, robots, og, canonical, schema).', [
+            self::tool( 'yoast_get_meta', 'Get all SEO meta for a post (title, description, focus keyword, canonical, OpenGraph, Twitter, robots) from whichever SEO plugin is active, Yoast SEO or RankMath. Despite the yoast_ name it works with both.', [ 'post_id' => self::i( 'Post ID.' ) ], [ 'post_id' ] ),
+            self::tool( 'yoast_set_meta', 'Set SEO meta (title, description, robots, OpenGraph, Twitter, canonical, schema) on whichever SEO plugin is active, Yoast SEO or RankMath. Despite the yoast_ name it works with both. Only the fields you send are changed.', [
                 'post_id'           => self::i( 'Post ID.' ),
                 'seo_title'         => self::s( 'SEO title, ideally ≤60 chars.' ),
                 'meta_description'  => self::s( 'Meta description, ideally ≤155 chars.' ),
@@ -609,10 +609,17 @@ Steps:
                 'canonical_url'     => self::s( 'Canonical URL override.' ),
                 'og_title'          => self::s( 'OpenGraph title.' ),
                 'og_description'    => self::s( 'OpenGraph description.' ),
+                'og_image'          => self::s( 'OpenGraph image URL.' ),
                 'twitter_title'     => self::s( 'Twitter card title.' ),
                 'twitter_description' => self::s( 'Twitter card description.' ),
+                'twitter_image'     => self::s( 'Twitter card image URL.' ),
                 'noindex'           => self::s( 'Robots noindex flag.' ),
                 'nofollow'          => self::s( 'Robots nofollow flag.' ),
+                'is_cornerstone'    => self::s( 'Mark as cornerstone (Yoast) / pillar (RankMath) content.' ),
+                'primary_category'  => self::s( 'Primary category term ID.' ),
+                'schema_article_type' => self::s( 'Schema article type (Yoast only; ignored on RankMath).' ),
+                'schema_page_type'  => self::s( 'Schema page type (Yoast only; ignored on RankMath).' ),
+                'raw'               => self::o( 'Advanced: raw meta keys to write. Keys must start with _yoast_ (Yoast) or rank_math_ (RankMath).' ),
             ], [ 'post_id' ] ),
             self::tool( 'yoast_audit', 'Run a readability/keyword audit and return recommendations.', [ 'post_id' => self::i( 'Post ID.' ) ], [ 'post_id' ] ),
             self::tool( 'yoast_sitemap_ping', 'Ping search engines with updated sitemap.' ),

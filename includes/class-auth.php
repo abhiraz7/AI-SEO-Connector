@@ -18,6 +18,9 @@ class AISEOC_Auth {
     const RATE_LIMIT_ATTEMPTS = 20;
     const RATE_LIMIT_WINDOW   = 900; // 15 minutes in seconds
 
+    /** Application Password names this plugin has created (current, then earlier releases). */
+    const APP_PASSWORD_NAMES = [ 'AI SEO Connector', 'VtechSEO Agent' ];
+
     public static function init() {}
 
     public static function permission_callback( WP_REST_Request $request ) {
@@ -138,7 +141,7 @@ class AISEOC_Auth {
             // Matches the current name and the name used by earlier releases,
             // so an Application Password created before the rename is still
             // replaced cleanly instead of being left behind, still valid.
-            if ( in_array( $app['name'], [ 'AI SEO Connector', 'VtechSEO Agent' ], true ) ) {
+            if ( in_array( $app['name'], self::APP_PASSWORD_NAMES, true ) ) {
                 WP_Application_Passwords::delete_application_password( $user_id, $app['uuid'] );
             }
         }
