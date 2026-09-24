@@ -99,7 +99,7 @@ is scoped to exactly four categories, and nothing outside them:
 | Group | What it allows | What it explicitly does NOT include |
 |---|---|---|
 | **Content** | Create, update, or delete posts/pages; schedule publishing; set featured images; manage taxonomy terms | No page-builder (Elementor/Divi) access, no theme file editing |
-| **SEO** | Read/write SEO meta fields (title, description, focus keyword, canonical, OpenGraph, robots) for **Yoast SEO or RankMath**, whichever is active; run an SEO audit; ping search engines' sitemaps | No support (yet) for AIOSEO or SEOPress meta fields -- these are detected and reported, not written to |
+| **SEO** | Read/write SEO meta fields (title, description, focus keyword, canonical, OpenGraph, robots) for **Yoast SEO or RankMath**, whichever is active; run an SEO audit | No support (yet) for AIOSEO or SEOPress meta fields -- these are detected and reported, not written to |
 | **Media** | Upload/list/delete media library items; set or fix alt text -- either by attachment ID, or by the image's public URL for images (like a theme logo) that have no attachment ID visible in page HTML | No bulk media operations beyond what's listed |
 | **Site info** | Read site name/URL/WordPress version/active theme/detected SEO plugin/content counts; list installed plugins (name, version, active/inactive); read a short list of site settings (homepage setup, site name, permalinks); clear the object cache and supported page caches | **Cannot** install, activate, or deactivate any plugin; cannot switch themes; never writes options or users. Option reads are limited to a short fixed list of site settings; every other option (passwords, API keys, other plugins' settings) is refused |
 
@@ -184,7 +184,7 @@ connection/token.
 
 **SEO tools**
 - [x] Yoast SEO and RankMath meta read/write behind one interface
-- [x] SEO audit and sitemap ping
+- [x] SEO audit
 - [x] Image alt text by attachment ID or by public URL
 - [ ] AIOSEO and SEOPress support
 

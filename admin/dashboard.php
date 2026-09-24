@@ -12,7 +12,7 @@ $is_paused    = $status['state'] === 'paused';
 
 $groups = [
     'content' => [ 'label' => 'Content',   'desc' => 'Create, update and delete posts &amp; pages, featured images, taxonomies.' ],
-    'seo'     => [ 'label' => 'SEO',       'desc' => 'Read and write Yoast or RankMath meta, run audits, ping sitemaps.' ],
+    'seo'     => [ 'label' => 'SEO',       'desc' => 'Read and write Yoast or RankMath meta and run audits.' ],
     'media'   => [ 'label' => 'Media',     'desc' => 'Upload, list and delete media; fix alt text by ID or URL.' ],
     'site'    => [ 'label' => 'Site info', 'desc' => 'Read site, plugin and a few site settings; clear caches. No installs, no user or option writes.' ],
 ];
