@@ -176,7 +176,6 @@ class AISEOC_Router {
             'yoast_get_meta'         => [ 'AISEOC_SEO', 'get_meta',        'seo' ],
             'yoast_set_meta'         => [ 'AISEOC_SEO', 'set_meta',        'seo' ],
             'yoast_audit'            => [ 'AISEOC_SEO', 'audit_post',      'seo' ],
-            'yoast_sitemap_ping'     => [ 'AISEOC_SEO', 'ping_sitemap',    'seo' ],
             /* Media */
             'upload_media'            => [ 'AISEOC_Media', 'upload',                'media' ],
             'list_media'              => [ 'AISEOC_Media', 'list_media',            'media' ],
@@ -208,8 +207,7 @@ class AISEOC_Router {
             /* ── SEO ── */
             [ 'name' => 'yoast_get_meta',         'group' => 'seo', 'description' => 'Get all SEO meta for a post from whichever SEO plugin is active (Yoast SEO or RankMath).' ],
             [ 'name' => 'yoast_set_meta',         'group' => 'seo', 'description' => 'Set SEO meta (title, description, robots, og, canonical, schema) on whichever SEO plugin is active (Yoast SEO or RankMath).' ],
-            [ 'name' => 'yoast_audit',            'group' => 'seo', 'description' => 'Run a readability/keyword audit and return recommendations.' ],
-            [ 'name' => 'yoast_sitemap_ping',     'group' => 'seo', 'description' => 'Ping search engines with updated sitemap.' ],
+            [ 'name' => 'yoast_audit',            'group' => 'seo', 'description' => 'Audit a post SEO basics (title/description length, focus keyword, featured image, content length); returns issues, a score and score_percent.' ],
 
             /* ── Media ── */
             [ 'name' => 'upload_media',            'group' => 'media', 'description' => 'Upload an image/file from URL or base64 to the media library.' ],

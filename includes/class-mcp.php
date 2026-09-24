@@ -190,7 +190,6 @@ class AISEOC_MCP {
             'yoast_get_meta'          => 'seo',
             'yoast_set_meta'          => 'seo',
             'yoast_audit'             => 'seo',
-            'yoast_sitemap_ping'      => 'seo',
             'upload_media'            => 'media',
             'list_media'              => 'media',
             'get_media'               => 'media',
@@ -447,7 +446,7 @@ Steps:
 1. `create_post` — status=draft, title optimised for `{$kw}` (≤60 chars), body {$wc} words using the keyword naturally
 2. `yoast_set_meta` — seo_title ≤60 chars (keyword near start), meta_description ≤155 chars with a CTA, focus_keyword=\"{$kw}\"
 3. Find a relevant image URL, `upload_media`, then `set_featured_image`
-4. `yoast_audit` — fix any red/orange issues until score ≥ 70
+4. `yoast_audit` — fix any red/orange issues until score_percent is 70 or higher
 5. `update_post` status=publish" ] ] ],
                 ] );
 
@@ -613,16 +612,15 @@ Steps:
                 'twitter_title'     => self::s( 'Twitter card title.' ),
                 'twitter_description' => self::s( 'Twitter card description.' ),
                 'twitter_image'     => self::s( 'Twitter card image URL.' ),
-                'noindex'           => self::s( 'Robots noindex flag.' ),
-                'nofollow'          => self::s( 'Robots nofollow flag.' ),
+                'noindex'           => self::b( 'true = add noindex (hide the page from search engines); false = remove the page-level noindex.' ),
+                'nofollow'          => self::b( 'true = add nofollow; false = remove it.' ),
                 'is_cornerstone'    => self::s( 'Mark as cornerstone (Yoast) / pillar (RankMath) content.' ),
                 'primary_category'  => self::s( 'Primary category term ID.' ),
                 'schema_article_type' => self::s( 'Schema article type (Yoast only; ignored on RankMath).' ),
                 'schema_page_type'  => self::s( 'Schema page type (Yoast only; ignored on RankMath).' ),
                 'raw'               => self::o( 'Advanced: raw meta keys to write. Keys must start with _yoast_ (Yoast) or rank_math_ (RankMath).' ),
             ], [ 'post_id' ] ),
-            self::tool( 'yoast_audit', 'Run a readability/keyword audit and return recommendations.', [ 'post_id' => self::i( 'Post ID.' ) ], [ 'post_id' ] ),
-            self::tool( 'yoast_sitemap_ping', 'Ping search engines with updated sitemap.' ),
+            self::tool( 'yoast_audit', 'Audit a post\'s SEO basics (title and description length, focus keyword, featured image, content length) and return issues plus a score and score_percent.', [ 'post_id' => self::i( 'Post ID.' ) ], [ 'post_id' ] ),
 
             /* ── Media ── */
             self::tool( 'upload_media', 'Upload an image/file from URL or base64 to the media library.', [

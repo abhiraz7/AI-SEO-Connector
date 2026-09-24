@@ -146,6 +146,10 @@ class AISEOC_SEO {
     }
 
     private static function set_meta_yoast( int $post_id, array $p ): array {
+        // Parse the robots flags before writing anything, so a bad value
+        // can't leave the post half updated.
+        $flags = self::read_robots_flags( $p );
+
         $map = [
             'seo_title'            => '_yoast_wpseo_title',
             'meta_description'     => '_yoast_wpseo_metadesc',
@@ -167,10 +171,19 @@ class AISEOC_SEO {
 
         $updated = [];
         foreach ( $map as $friendly => $meta_key ) {
-            if ( isset( $p[ $friendly ] ) ) {
-                update_post_meta( $post_id, $meta_key, $p[ $friendly ] );
-                $updated[] = $friendly;
+            if ( ! isset( $p[ $friendly ] ) ) continue;
+
+            $value = $p[ $friendly ];
+            if ( $friendly === 'noindex' ) {
+                // Yoast: '1' = noindex, '0' = follow the site default,
+                // '2' = force index. true/false map to '1'/'0'; '2' passes
+                // through so a value read with get_meta can be written back.
+                $value = ( (string) $value === '2' ) ? '2' : ( $flags['noindex'] ? '1' : '0' );
+            } elseif ( $friendly === 'nofollow' ) {
+                $value = $flags['nofollow'] ? '1' : '0';
             }
+            update_post_meta( $post_id, $meta_key, $value );
+            $updated[] = $friendly;
         }
 
         if ( ! empty( $p['raw'] ) && is_array( $p['raw'] ) ) {
@@ -187,6 +200,8 @@ class AISEOC_SEO {
     }
 
     private static function set_meta_rankmath( int $post_id, array $p ): array {
+        $flags = self::read_robots_flags( $p );
+
         $map = [
             'seo_title'            => 'rank_math_title',
             'meta_description'     => 'rank_math_description',
@@ -213,16 +228,15 @@ class AISEOC_SEO {
         // noindex/nofollow: merge into RankMath's single rank_math_robots
         // array rather than overwriting it, so setting noindex doesn't
         // silently clear an existing nofollow (or vice versa).
-        if ( isset( $p['noindex'] ) || isset( $p['nofollow'] ) ) {
+        if ( $flags ) {
             $robots = get_post_meta( $post_id, 'rank_math_robots', true );
             $robots = is_array( $robots ) ? $robots : [];
 
-            foreach ( [ 'noindex', 'nofollow' ] as $flag ) {
-                if ( ! isset( $p[ $flag ] ) ) continue;
+            foreach ( $flags as $flag => $on ) {
                 $has = in_array( $flag, $robots, true );
-                if ( $p[ $flag ] && ! $has ) {
+                if ( $on && ! $has ) {
                     $robots[] = $flag;
-                } elseif ( ! $p[ $flag ] && $has ) {
+                } elseif ( ! $on && $has ) {
                     $robots = array_values( array_diff( $robots, [ $flag ] ) );
                 }
                 $updated[] = $flag;
@@ -248,35 +262,39 @@ class AISEOC_SEO {
         $post_id = intval( $p['post_id'] ?? 0 );
         if ( ! $post_id ) throw new InvalidArgumentException( 'post_id required.' );
 
-        $post   = get_post( $post_id );
+        $post   = AISEOC_Content::require_post( $post_id );
         $meta   = self::get_meta( $p );
         $issues = [];
         $passes = [];
 
-        if ( empty( $meta['seo_title'] ) ) {
+        $text  = self::plain_text( $post->post_content );
+        $title = (string) $meta['seo_title'];
+        $desc  = (string) $meta['meta_description'];
+
+        if ( $title === '' ) {
             $issues[] = [ 'severity' => 'error', 'field' => 'seo_title', 'message' => 'SEO title is missing.' ];
-        } elseif ( strlen( $meta['seo_title'] ) > 60 ) {
-            $issues[] = [ 'severity' => 'warn', 'field' => 'seo_title', 'message' => 'SEO title exceeds 60 characters (' . strlen( $meta['seo_title'] ) . ').' ];
+        } elseif ( self::len( $title ) > 60 ) {
+            $issues[] = [ 'severity' => 'warn', 'field' => 'seo_title', 'message' => 'SEO title exceeds 60 characters (' . self::len( $title ) . ').' ];
         } else {
             $passes[] = 'SEO title is set and within length.';
         }
 
-        if ( empty( $meta['meta_description'] ) ) {
+        if ( $desc === '' ) {
             $issues[] = [ 'severity' => 'error', 'field' => 'meta_description', 'message' => 'Meta description is missing.' ];
-        } elseif ( strlen( $meta['meta_description'] ) > 155 ) {
-            $issues[] = [ 'severity' => 'warn', 'field' => 'meta_description', 'message' => 'Meta description exceeds 155 characters.' ];
+        } elseif ( self::len( $desc ) > 155 ) {
+            $issues[] = [ 'severity' => 'warn', 'field' => 'meta_description', 'message' => 'Meta description exceeds 155 characters (' . self::len( $desc ) . ').' ];
         } else {
             $passes[] = 'Meta description OK.';
         }
 
-        if ( empty( $meta['focus_keyword'] ) ) {
+        $kw = trim( (string) $meta['focus_keyword'] );
+        if ( $kw === '' ) {
             $issues[] = [ 'severity' => 'warn', 'field' => 'focus_keyword', 'message' => 'Focus keyword not set.' ];
         } else {
-            $kw = strtolower( $meta['focus_keyword'] );
-            if ( $post && strpos( strtolower( $post->post_title ), $kw ) === false ) {
+            if ( ! self::contains( $post->post_title, $kw ) ) {
                 $issues[] = [ 'severity' => 'warn', 'field' => 'focus_keyword', 'message' => "Focus keyword \"{$kw}\" not found in post title." ];
             }
-            if ( $post && strpos( strtolower( $post->post_content ), $kw ) === false ) {
+            if ( ! self::contains( $text, $kw ) ) {
                 $issues[] = [ 'severity' => 'warn', 'field' => 'focus_keyword', 'message' => "Focus keyword \"{$kw}\" not found in post content." ];
             }
         }
@@ -287,48 +305,88 @@ class AISEOC_SEO {
             $passes[] = 'Featured image is set.';
         }
 
-        if ( empty( $meta['og_title'] ) && empty( $meta['seo_title'] ) ) {
+        if ( empty( $meta['og_title'] ) && $title === '' ) {
             $issues[] = [ 'severity' => 'info', 'field' => 'og_title', 'message' => 'OG title not set (will fallback to post title).' ];
         }
 
-        if ( $post ) {
-            $word_count = str_word_count( strip_tags( $post->post_content ) );
-            if ( $word_count < 300 ) {
-                $issues[] = [ 'severity' => 'warn', 'field' => 'content', 'message' => "Content is only {$word_count} words. Recommended: 300+." ];
-            } else {
-                $passes[] = "Content length OK ({$word_count} words).";
-            }
+        $word_count = self::word_count( $text );
+        if ( $word_count < 300 ) {
+            $issues[] = [ 'severity' => 'warn', 'field' => 'content', 'message' => "Content is only {$word_count} words. Recommended: 300+." ];
+        } else {
+            $passes[] = "Content length OK ({$word_count} words).";
         }
 
         if ( empty( $meta['canonical_url'] ) ) {
             $issues[] = [ 'severity' => 'info', 'field' => 'canonical', 'message' => 'No canonical URL set (using default).' ];
         }
 
+        // Errors and warnings both count against the score; info notes don't.
+        $problems = count( array_filter( $issues, fn( $i ) => $i['severity'] !== 'info' ) );
+        $total    = count( $passes ) + $problems;
+
         return [
-            'post_id' => $post_id,
-            'issues'  => $issues,
-            'passes'  => $passes,
-            'score'   => count( $passes ) . '/' . ( count( $passes ) + count( array_filter( $issues, fn($i) => $i['severity'] === 'error' ) ) ),
+            'post_id'       => $post_id,
+            'issues'        => $issues,
+            'passes'        => $passes,
+            'score'         => count( $passes ) . '/' . $total,
+            'score_percent' => $total ? (int) round( 100 * count( $passes ) / $total ) : 0,
+            'word_count'    => $word_count,
         ];
     }
 
-    /* ── Ping sitemap to search engines ─────────────────── */
-    public static function ping_sitemap( array $p ): array {
-        $sitemap_url = get_bloginfo( 'url' ) . '/sitemap_index.xml';
-        $endpoints   = [
-            'Google' => 'https://www.google.com/ping?sitemap=' . rawurlencode( $sitemap_url ),
-            'Bing'   => 'https://www.bing.com/ping?sitemap='   . rawurlencode( $sitemap_url ),
-        ];
+    /* ── Helpers ─────────────────────────────────────────── */
 
-        $results = [];
-        foreach ( $endpoints as $engine => $url ) {
-            $response = wp_remote_get( $url, [ 'timeout' => 10 ] );
-            $results[ $engine ] = is_wp_error( $response )
-                ? 'error: ' . $response->get_error_message()
-                : 'HTTP ' . wp_remote_retrieve_response_code( $response );
+    /**
+     * Read noindex/nofollow from the request as real booleans, before any
+     * write happens. Returns only the flags that were sent.
+     *
+     * Accepts true/false, 1/0 and the strings true/false/yes/no/on/off/1/0.
+     * Anything else is rejected: PHP treats the string "false" as true, so
+     * guessing here could add noindex to a page when the caller meant the
+     * opposite.
+     */
+    private static function read_robots_flags( array $p ): array {
+        $flags = [];
+        foreach ( [ 'noindex', 'nofollow' ] as $field ) {
+            if ( ! isset( $p[ $field ] ) ) continue;
+            $v = $p[ $field ];
+            // Yoast's own "force index" value, kept so a value read with get_meta can be written back.
+            if ( $field === 'noindex' && (string) $v === '2' ) { $flags[ $field ] = false; continue; }
+            if ( is_bool( $v ) ) { $flags[ $field ] = $v; continue; }
+            if ( is_int( $v ) && ( $v === 0 || $v === 1 ) ) { $flags[ $field ] = (bool) $v; continue; }
+            if ( is_string( $v ) ) {
+                $s = strtolower( trim( $v ) );
+                if ( in_array( $s, [ '1', 'true', 'yes', 'on' ], true ) )         { $flags[ $field ] = true;  continue; }
+                if ( in_array( $s, [ '0', '', 'false', 'no', 'off' ], true ) )    { $flags[ $field ] = false; continue; }
+            }
+            throw new InvalidArgumentException( "'{$field}' must be true or false." );
         }
+        return $flags;
+    }
 
-        AISEOC_Logger::log( 'info', 'Pinged sitemaps: ' . wp_json_encode( $results ) );
-        return [ 'sitemap' => $sitemap_url, 'results' => $results ];
+    /* Unicode-safe text helpers: strlen()/str_word_count()/strtolower()
+     * work on bytes and Latin letters only, so Hindi, Arabic, Chinese etc.
+     * were measured wrongly. These use mbstring when the host has it. */
+
+    private static function len( string $s ): int {
+        return function_exists( 'mb_strlen' ) ? mb_strlen( $s, 'UTF-8' ) : strlen( $s );
+    }
+
+    private static function contains( string $haystack, string $needle ): bool {
+        if ( $needle === '' ) return true;
+        return function_exists( 'mb_stripos' )
+            ? mb_stripos( $haystack, $needle, 0, 'UTF-8' ) !== false
+            : stripos( $haystack, $needle ) !== false;
+    }
+
+    /** Post HTML as plain text: no tags/scripts/shortcodes, entities decoded. */
+    private static function plain_text( string $html ): string {
+        return html_entity_decode( wp_strip_all_tags( strip_shortcodes( $html ) ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+    }
+
+    /** Words in any script. \p{M} keeps combining marks (e.g. Devanagari vowel signs) inside their word. */
+    private static function word_count( string $text ): int {
+        $n = preg_match_all( "/[\\p{L}\\p{M}\\p{N}]+(?:['\u{2019}\\-][\\p{L}\\p{M}\\p{N}]+)*/u", $text );
+        return $n === false ? str_word_count( $text ) : $n;
     }
 }
