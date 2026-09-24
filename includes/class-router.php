@@ -191,7 +191,7 @@ class AISEOC_Router {
             [ 'name' => 'get_site_info',          'group' => 'site', 'description' => 'Get WordPress site info: name, URL, version, active theme, post/user/media counts.' ],
             [ 'name' => 'list_plugins',           'group' => 'site', 'description' => 'List installed plugins (name, version, active status) -- read-only, no install/activate/deactivate.' ],
             [ 'name' => 'get_options',             'group' => 'site', 'description' => 'Read specific wp_options by key -- sensitive keys (auth salts, active_plugins, the API token itself, etc.) are always blocked.' ],
-            [ 'name' => 'flush_cache',             'group' => 'site', 'description' => 'Flush the WordPress object cache, e.g. after a fix so it is visible immediately instead of stuck behind a stale cache.' ],
+            [ 'name' => 'flush_cache',             'group' => 'site', 'description' => 'Clear the object cache and supported page caches, for one post (post_id) or the whole site. Returns which caches were cleared.' ],
         ];
     }
 }

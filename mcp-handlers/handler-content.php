@@ -85,7 +85,11 @@ class AISEOC_Content {
         }
 
         AISEOC_Logger::log( 'info', "Updated post #{$post_id}" );
-        return [ 'post_id' => $post_id, 'url' => get_permalink( $post_id ) ];
+        return [
+            'post_id'       => $post_id,
+            'url'           => get_permalink( $post_id ),
+            'caches_purged' => AISEOC_Cache::purge_post( $post_id ),
+        ];
     }
 
     /* ── Get post ─────────────────────────────────────────── */
@@ -192,10 +196,10 @@ class AISEOC_Content {
         if ( $media_id ) {
             set_post_thumbnail( $post_id, $media_id );
             AISEOC_Logger::log( 'info', "Set featured image #{$media_id} on post #{$post_id}" );
-            return [ 'post_id' => $post_id, 'thumbnail_id' => $media_id ];
+            return [ 'post_id' => $post_id, 'thumbnail_id' => $media_id, 'caches_purged' => AISEOC_Cache::purge_post( $post_id ) ];
         } else {
             delete_post_thumbnail( $post_id );
-            return [ 'post_id' => $post_id, 'thumbnail_id' => null ];
+            return [ 'post_id' => $post_id, 'thumbnail_id' => null, 'caches_purged' => AISEOC_Cache::purge_post( $post_id ) ];
         }
     }
 
