@@ -480,7 +480,7 @@ Steps:
         $allowed = json_decode( get_option( 'aiseoc_allowed_actions', '[]' ), true );
         $parts[] = 'Enabled groups: ' . implode( ', ', $allowed ) . '.';
         $parts[] = 'Use resources/list to browse posts/pages/media. Use prompts/list for workflow templates.';
-        $parts[] = 'Call flush_cache after bulk changes so fixes are visible immediately, not stuck behind a stale cache.';
+        $parts[] = 'Writes to a post clear the caches for that post (WordPress object cache plus supported page-cache plugins) and report them in caches_purged. After bulk or media changes, call flush_cache. CDN/edge caches such as Cloudflare are not cleared.';
 
         return implode( ' ', $parts );
     }
@@ -638,7 +638,9 @@ Steps:
             self::tool( 'get_options', 'Read specific wp_options by key. Sensitive keys (auth salts, this plugin\'s own token, etc.) are always blocked and returned as "[blocked]".', [
                 'keys' => self::arr( 'Option key names to read.' ),
             ] ),
-            self::tool( 'flush_cache', 'Flush the WordPress object cache, e.g. after applying a fix so it is visible immediately.' ),
+            self::tool( 'flush_cache', 'Clear caches so a fix shows up: the WordPress object cache plus the page cache of supported cache plugins (WP Rocket, LiteSpeed, W3 Total Cache, WP Super Cache, WP Fastest Cache, SiteGround). Returns which caches were cleared. CDN/edge caches are not included.', [
+                'post_id' => self::i( 'Clear only the caches for this post. Omit to clear everything.' ),
+            ] ),
         ];
     }
 }

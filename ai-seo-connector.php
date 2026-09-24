@@ -24,6 +24,7 @@ require_once AISEOC_PLUGIN_DIR . 'includes/class-auth.php';
 require_once AISEOC_PLUGIN_DIR . 'includes/class-router.php';
 require_once AISEOC_PLUGIN_DIR . 'includes/class-mcp.php';
 require_once AISEOC_PLUGIN_DIR . 'includes/class-logger.php';
+require_once AISEOC_PLUGIN_DIR . 'includes/class-cache.php';
 require_once AISEOC_PLUGIN_DIR . 'includes/class-status.php';
 require_once AISEOC_PLUGIN_DIR . 'includes/class-doctor.php';
 require_once AISEOC_PLUGIN_DIR . 'mcp-handlers/handler-content.php';

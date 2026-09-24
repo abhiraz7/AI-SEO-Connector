@@ -90,11 +90,16 @@ class AISEOC_Site {
         return $result;
     }
 
-    /* ── Flush cache (so a deployed fix is visible immediately) ── */
+    /* ── Flush caches so a deployed fix shows up ────────────────
+     * With post_id: that post's object + page cache. Without: everything
+     * this plugin can reach. Returns which caches were actually cleared;
+     * CDN/edge caches are outside WordPress and not included.
+     */
     public static function flush_cache( array $p ): array {
-        wp_cache_flush();
-        AISEOC_Logger::log( 'info', 'Object cache flushed.' );
-        return [ 'object_cache' => true ];
+        $post_id = intval( $p['post_id'] ?? 0 );
+        $done    = $post_id ? AISEOC_Cache::purge_post( $post_id ) : AISEOC_Cache::purge_all();
+        AISEOC_Logger::log( 'info', ( $post_id ? "Caches cleared for post #{$post_id}: " : 'All caches cleared: ' ) . implode( ', ', $done ) );
+        return [ 'post_id' => $post_id ?: null, 'caches_purged' => $done ];
     }
 
     /* ── Helpers ───────────────────────────────────────────── */

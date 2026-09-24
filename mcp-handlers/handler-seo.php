@@ -135,10 +135,14 @@ class AISEOC_SEO {
         $post_id = intval( $p['post_id'] ?? 0 );
         if ( ! $post_id ) throw new Exception( 'post_id required.' );
 
-        if ( self::active_provider() === 'rankmath' ) {
-            return self::set_meta_rankmath( $post_id, $p );
-        }
-        return self::set_meta_yoast( $post_id, $p );
+        $result = self::active_provider() === 'rankmath'
+            ? self::set_meta_rankmath( $post_id, $p )
+            : self::set_meta_yoast( $post_id, $p );
+
+        // Meta writes don't fire save_post, so cache plugins won't purge on
+        // their own -- without this the old title can stay cached.
+        $result['caches_purged'] = AISEOC_Cache::purge_post( $post_id );
+        return $result;
     }
 
     private static function set_meta_yoast( int $post_id, array $p ): array {
