@@ -63,7 +63,7 @@ class AISEOC_Media {
             self::assert_safe_filename( $filename );
 
             $data = base64_decode( $p['base64'] );
-            if ( $data === false ) throw new Exception( 'Invalid base64 data.' );
+            if ( $data === false ) throw new InvalidArgumentException( 'Invalid base64 data.' );
 
             $finfo = new finfo( FILEINFO_MIME_TYPE );
             $detected_mime = $finfo->buffer( $data );
@@ -84,12 +84,12 @@ class AISEOC_Media {
             wp_update_attachment_metadata( $attach_id, wp_generate_attachment_metadata( $attach_id, $upload['file'] ) );
 
         } else {
-            throw new Exception( 'Provide url or base64.' );
+            throw new InvalidArgumentException( 'Provide url or base64.' );
         }
 
         if ( $alt )     update_post_meta( $attach_id, '_wp_attachment_image_alt', $alt );
         if ( $caption ) {
-            wp_update_post( [ 'ID' => $attach_id, 'post_excerpt' => $caption ] );
+            AISEOC_Content::save_post( [ 'ID' => $attach_id, 'post_excerpt' => $caption ] );
         }
 
         AISEOC_Logger::log( 'info', "Uploaded media #{$attach_id}" );
@@ -130,7 +130,7 @@ class AISEOC_Media {
     public static function get_media( array $p ): array {
         $id   = intval( $p['media_id'] ?? 0 );
         $post = get_post( $id );
-        if ( ! $post || $post->post_type !== 'attachment' ) throw new Exception( "Media #{$id} not found." );
+        if ( ! $post || $post->post_type !== 'attachment' ) throw new InvalidArgumentException( "Media #{$id} not found." );
 
         $meta = wp_get_attachment_metadata( $id );
         return [
@@ -158,14 +158,14 @@ class AISEOC_Media {
     /* ── Update meta by media_id ──────────────────────────── */
     public static function update_meta( array $p ): array {
         $id = intval( $p['media_id'] ?? 0 );
-        if ( ! $id ) throw new Exception( 'media_id required.' );
+        if ( ! $id ) throw new InvalidArgumentException( 'media_id required.' );
 
         $update = [ 'ID' => $id ];
         if ( isset( $p['title'] ) )       $update['post_title']   = sanitize_text_field( $p['title'] );
         if ( isset( $p['caption'] ) )     $update['post_excerpt'] = sanitize_text_field( $p['caption'] );
         if ( isset( $p['description'] ) ) $update['post_content'] = sanitize_textarea_field( $p['description'] );
 
-        wp_update_post( $update );
+        AISEOC_Content::save_post( $update );
 
         if ( isset( $p['alt'] ) ) {
             update_post_meta( $id, '_wp_attachment_image_alt', sanitize_text_field( $p['alt'] ) );
@@ -193,11 +193,11 @@ class AISEOC_Media {
     public static function update_alt_by_url( array $p ): array {
         $url = esc_url_raw( $p['url'] ?? '' );
         $alt = sanitize_text_field( $p['alt'] ?? '' );
-        if ( ! $url ) throw new Exception( 'url required.' );
+        if ( ! $url ) throw new InvalidArgumentException( 'url required.' );
 
         $id = attachment_url_to_postid( $url );
         if ( ! $id ) {
-            throw new Exception( "No media attachment found for URL: {$url}. It may be hosted off-site, hotlinked, or its stored path no longer matches this URL (e.g. after a domain change)." );
+            throw new InvalidArgumentException( "No media attachment found for URL: {$url}. It may be hosted off-site, hotlinked, or its stored path no longer matches this URL (e.g. after a domain change)." );
         }
 
         update_post_meta( $id, '_wp_attachment_image_alt', $alt );
@@ -215,12 +215,12 @@ class AISEOC_Media {
         $host   = $parsed['host'] ?? '';
 
         if ( empty( $host ) ) {
-            throw new Exception( 'Invalid URL.' );
+            throw new InvalidArgumentException( 'Invalid URL.' );
         }
 
         $blocked_hosts = [ 'localhost', '0.0.0.0', '::1', '[::]' ];
         if ( in_array( strtolower( $host ), $blocked_hosts, true ) ) {
-            throw new Exception( 'URL host is not allowed.' );
+            throw new InvalidArgumentException( 'URL host is not allowed.' );
         }
 
         $ip = filter_var( $host, FILTER_VALIDATE_IP )
@@ -228,28 +228,28 @@ class AISEOC_Media {
             : gethostbyname( $host );
 
         if ( ! filter_var( $ip, FILTER_VALIDATE_IP ) ) {
-            throw new Exception( 'Could not resolve URL host.' );
+            throw new InvalidArgumentException( 'Could not resolve URL host.' );
         }
 
         if ( ! filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE ) ) {
-            throw new Exception( 'URL resolves to a private or reserved address and is not allowed.' );
+            throw new InvalidArgumentException( 'URL resolves to a private or reserved address and is not allowed.' );
         }
     }
 
     private static function assert_safe_filename( string $filename ): void {
         $ext = strtolower( pathinfo( $filename, PATHINFO_EXTENSION ) );
         if ( in_array( $ext, self::BLOCKED_EXTENSIONS, true ) ) {
-            throw new Exception( "File extension '.{$ext}' is not allowed." );
+            throw new InvalidArgumentException( "File extension '.{$ext}' is not allowed." );
         }
     }
 
     private static function assert_safe_mime( string $mime ): void {
         $mime = strtolower( $mime );
         if ( in_array( $mime, self::BLOCKED_MIME_TYPES, true ) ) {
-            throw new Exception( "MIME type '{$mime}' is not allowed." );
+            throw new InvalidArgumentException( "MIME type '{$mime}' is not allowed." );
         }
         if ( strpos( $mime, 'php' ) !== false ) {
-            throw new Exception( "MIME type '{$mime}' is not allowed." );
+            throw new InvalidArgumentException( "MIME type '{$mime}' is not allowed." );
         }
     }
 

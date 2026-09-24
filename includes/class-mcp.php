@@ -5,12 +5,13 @@
  * POST /wp-json/aiseoc/v1/mcp  — JSON-RPC request (single or batch)
  *      If request has Accept: text/event-stream → each response
  *      object is streamed as an SSE "message" event before exit.
- *      (Also reachable at the legacy /wp-json/vtseo/v1/mcp path -- see
+ *      (Also reachable under the compatibility alias namespace -- see
  *      class-router.php.)
  *
- * GET  /wp-json/aiseoc/v1/mcp  — SSE keep-alive channel
- *      Requires Accept: text/event-stream; streams ": ping"
- *      comments every 15 s for up to 5 minutes.
+ * GET  /wp-json/aiseoc/v1/mcp  — answers 405 (Allow: POST). This server
+ *      has no server-initiated messages, and the spec lets a server that
+ *      offers no GET stream say so. (A held-open stream would tie up one
+ *      PHP worker per connection.)
  *
  * Spec: MCP protocol version 2024-11-05, Streamable HTTP transport.
  */
@@ -57,14 +58,22 @@ class AISEOC_MCP {
     }
 
     public static function handle_get( WP_REST_Request $request ) {
-        $accept = $request->get_header( 'accept' ) ?? '';
-        if ( strpos( $accept, 'text/event-stream' ) === false ) {
-            return new WP_REST_Response(
-                [ 'error' => 'GET /mcp requires Accept: text/event-stream' ],
-                400
-            );
+        return new WP_REST_Response(
+            [ 'error' => 'GET is not supported on /mcp. Send JSON-RPC requests with POST.' ],
+            405
+        );
+    }
+
+    /**
+     * WordPress builds the Allow header from the methods registered on a
+     * route, so it would advertise GET even though GET answers 405. Correct
+     * it for this route only (hooked to rest_post_dispatch in the router).
+     */
+    public static function fix_allow_header( $response, $server, $request ) {
+        if ( $request->get_method() === 'GET' && preg_match( '#^/(aiseoc|vtseo)/v1/mcp$#', $request->get_route() ) ) {
+            $response->header( 'Allow', 'POST' );
         }
-        self::open_sse_stream(); // never returns
+        return $response;
     }
 
     /* ════════════════════════════════════════════════════════
@@ -91,25 +100,6 @@ class AISEOC_MCP {
         exit;
     }
 
-    private static function open_sse_stream(): void {
-        while ( ob_get_level() > 0 ) { ob_end_clean(); }
-        ob_implicit_flush( true );
-
-        header( 'Content-Type: text/event-stream; charset=UTF-8' );
-        header( 'Cache-Control: no-cache, no-store' );
-        header( 'X-Accel-Buffering: no' );
-
-        $start = time();
-        while ( ! connection_aborted() && ( time() - $start ) < 300 ) {
-            echo ": ping\n\n";
-            @ob_flush(); flush();
-            sleep( 15 );
-        }
-
-        AISEOC_Logger::log( 'info', 'MCP SSE channel closed' );
-        exit;
-    }
-
     /* ════════════════════════════════════════════════════════
      *  JSON-RPC 2.0 dispatcher
      * ════════════════════════════════════════════════════════ */
@@ -126,25 +116,37 @@ class AISEOC_MCP {
 
         switch ( $method ) {
             case 'initialize':
-                return self::handle_initialize( $id, $params );
+                $response = self::handle_initialize( $id, $params );
+                break;
             case 'ping':
-                return self::make_result( $id, new stdClass() );
+                $response = self::make_result( $id, new stdClass() );
+                break;
             case 'tools/list':
-                return self::handle_tools_list( $id );
+                $response = self::handle_tools_list( $id );
+                break;
             case 'tools/call':
-                return self::handle_tools_call( $id, $params );
+                $response = self::handle_tools_call( $id, $params );
+                break;
             case 'resources/list':
-                return self::handle_resources_list( $id, $params );
+                $response = self::handle_resources_list( $id, $params );
+                break;
             case 'resources/read':
-                return self::handle_resource_read( $id, $params );
+                $response = self::handle_resource_read( $id, $params );
+                break;
             case 'prompts/list':
-                return self::handle_prompts_list( $id );
+                $response = self::handle_prompts_list( $id );
+                break;
             case 'prompts/get':
-                return self::handle_prompt_get( $id, $params );
+                $response = self::handle_prompt_get( $id, $params );
+                break;
             default:
-                if ( $is_notification ) return null;
-                return self::make_error( $id, -32601, "Method not found: {$method}" );
+                $response = self::make_error( $id, -32601, "Method not found: {$method}" );
         }
+
+        // JSON-RPC: a message without an id is a notification and must not
+        // get a reply, whatever the method (this also covers notifications
+        // such as notifications/initialized that we don't act on).
+        return $is_notification ? null : $response;
     }
 
     /* ════════════════════════════════════════════════════════
@@ -175,37 +177,14 @@ class AISEOC_MCP {
      * ════════════════════════════════════════════════════════ */
 
     private static function handle_tools_list( $id ): array {
-        $allowed = json_decode( get_option( 'aiseoc_allowed_actions', '[]' ), true );
+        $allowed = AISEOC_Router::allowed_groups();
 
-        $group_map = [
-            'create_post'             => 'content',
-            'update_post'             => 'content',
-            'get_post'                => 'content',
-            'list_posts'              => 'content',
-            'delete_post'             => 'content',
-            'schedule_post'           => 'content',
-            'set_featured_image'      => 'content',
-            'get_taxonomies'          => 'content',
-            'assign_terms'            => 'content',
-            'yoast_get_meta'          => 'seo',
-            'yoast_set_meta'          => 'seo',
-            'yoast_audit'             => 'seo',
-            'yoast_sitemap_ping'      => 'seo',
-            'upload_media'            => 'media',
-            'list_media'              => 'media',
-            'get_media'               => 'media',
-            'delete_media'            => 'media',
-            'update_media_meta'       => 'media',
-            'update_media_alt_by_url' => 'media',
-            'get_site_info'           => 'site',
-            'list_plugins'            => 'site',
-            'get_options'             => 'site',
-            'flush_cache'             => 'site',
-        ];
+        // The tool -> group mapping lives in one place: AISEOC_Router::registry().
+        $registry = AISEOC_Router::registry();
 
         $tools = array_values( array_filter(
             self::tool_definitions(),
-            fn( $t ) => in_array( $group_map[ $t['name'] ] ?? '', $allowed, true )
+            fn( $t ) => in_array( $registry[ $t['name'] ][2] ?? '', $allowed, true )
         ) );
 
         return self::make_result( $id, [ 'tools' => $tools ] );
@@ -218,7 +197,7 @@ class AISEOC_MCP {
     private static function handle_tools_call( $id, array $params ): array {
         $name      = sanitize_key( $params['name'] ?? '' );
         $arguments = is_array( $params['arguments'] ?? null ) ? $params['arguments'] : [];
-        $allowed   = json_decode( get_option( 'aiseoc_allowed_actions', '[]' ), true );
+        $allowed   = AISEOC_Router::allowed_groups();
 
         AISEOC_Logger::log( 'info', "MCP tools/call: {$name}" );
 
@@ -234,7 +213,7 @@ class AISEOC_MCP {
         } catch ( Throwable $e ) {
             AISEOC_Logger::log( 'error', "MCP tools/call '{$name}': " . $e->getMessage() );
             return self::make_result( $id, [
-                'content' => [ [ 'type' => 'text', 'text' => $e->getMessage() ] ],
+                'content' => [ [ 'type' => 'text', 'text' => AISEOC_Router::describe_error( $e )[1] ] ],
                 'isError' => true,
             ] );
         }
@@ -244,50 +223,63 @@ class AISEOC_MCP {
      *  resources/list + resources/read (browse posts/pages/media)
      * ════════════════════════════════════════════════════════ */
 
+    /*
+     * Resources follow the same rules as the tools: posts/pages need the
+     * Content group, media needs the Media group, only public post types
+     * are exposed, only published (not password-protected) posts can be
+     * read, and meta goes through the same sensitive-key filter as get_post.
+     */
     private static function handle_resources_list( $id, array $params ): array {
         $cursor   = $params['cursor'] ?? null;
         $paged    = $cursor ? max( 1, intval( base64_decode( $cursor ) ) ) : 1;
         $per_page = 15;
+        $allowed  = AISEOC_Router::allowed_groups();
 
         $resources = [];
+        $posts     = [];
 
-        $posts = get_posts( [
-            'post_type'      => [ 'post', 'page' ],
-            'post_status'    => 'publish',
-            'posts_per_page' => $per_page,
-            'paged'          => $paged,
-            'orderby'        => 'modified',
-            'order'          => 'DESC',
-            'no_found_rows'  => false,
-        ] );
+        if ( in_array( 'content', $allowed, true ) ) {
+            $posts = get_posts( [
+                'post_type'      => AISEOC_Content::allowed_post_types(),
+                'post_status'    => 'publish',
+                'has_password'   => false,
+                'posts_per_page' => $per_page,
+                'paged'          => $paged,
+                'orderby'        => 'modified',
+                'order'          => 'DESC',
+                'no_found_rows'  => false,
+            ] );
 
-        foreach ( $posts as $post ) {
-            $snippet = wp_strip_all_tags( $post->post_excerpt ?: $post->post_content );
-            $resources[] = [
-                'uri'         => "wp://{$post->post_type}/{$post->ID}",
-                'name'        => $post->post_title ?: "(#{$post->ID})",
-                'description' => wp_trim_words( $snippet, 20 ),
-                'mimeType'    => 'application/json',
-            ];
+            foreach ( $posts as $post ) {
+                $snippet = wp_strip_all_tags( $post->post_excerpt ?: $post->post_content );
+                $resources[] = [
+                    'uri'         => "wp://{$post->post_type}/{$post->ID}",
+                    'name'        => $post->post_title ?: "(#{$post->ID})",
+                    'description' => wp_trim_words( $snippet, 20 ),
+                    'mimeType'    => 'application/json',
+                ];
+            }
         }
 
-        $media = get_posts( [
-            'post_type'      => 'attachment',
-            'post_status'    => 'inherit',
-            'posts_per_page' => 8,
-            'paged'          => $paged,
-            'orderby'        => 'modified',
-            'order'          => 'DESC',
-        ] );
+        if ( in_array( 'media', $allowed, true ) ) {
+            $media = get_posts( [
+                'post_type'      => 'attachment',
+                'post_status'    => 'inherit',
+                'posts_per_page' => 8,
+                'paged'          => $paged,
+                'orderby'        => 'modified',
+                'order'          => 'DESC',
+            ] );
 
-        foreach ( $media as $item ) {
-            $mime = get_post_mime_type( $item->ID ) ?: 'application/octet-stream';
-            $file = get_attached_file( $item->ID );
-            $resources[] = [
-                'uri'      => "wp://media/{$item->ID}",
-                'name'     => $item->post_title ?: ( $file ? basename( $file ) : "media-{$item->ID}" ),
-                'mimeType' => $mime,
-            ];
+            foreach ( $media as $item ) {
+                $mime = get_post_mime_type( $item->ID ) ?: 'application/octet-stream';
+                $file = get_attached_file( $item->ID );
+                $resources[] = [
+                    'uri'      => "wp://media/{$item->ID}",
+                    'name'     => $item->post_title ?: ( $file ? basename( $file ) : "media-{$item->ID}" ),
+                    'mimeType' => $mime,
+                ];
+            }
         }
 
         $result = [ 'resources' => $resources ];
@@ -299,18 +291,22 @@ class AISEOC_MCP {
     }
 
     private static function handle_resource_read( $id, array $params ): array {
-        $uri = $params['uri'] ?? '';
+        $uri = (string) ( $params['uri'] ?? '' );
 
-        if ( ! preg_match( '#^wp://([^/]+)/(\d+)$#', $uri, $m ) ) {
-            return self::make_error( $id, -32602, "Invalid resource URI: {$uri}. Expected wp://type/id" );
+        if ( ! preg_match( '#^wp://([a-z0-9_-]+)/(\d+)$#', $uri, $m ) ) {
+            return self::make_error( $id, -32602, 'Invalid resource URI. Expected wp://type/id' );
         }
 
         $type    = $m[1];
         $post_id = intval( $m[2] );
+        $allowed = AISEOC_Router::allowed_groups();
+        $post    = get_post( $post_id );
 
         if ( $type === 'media' ) {
-            $post = get_post( $post_id );
-            if ( ! $post ) {
+            if ( ! in_array( 'media', $allowed, true ) ) {
+                return self::make_error( $id, -32602, "Tool group 'media' is disabled. Enable it in AI SEO Connector settings." );
+            }
+            if ( ! $post || $post->post_type !== 'attachment' ) {
                 return self::make_error( $id, -32602, "Media not found: {$post_id}" );
             }
             $data = wp_json_encode( [
@@ -329,13 +325,20 @@ class AISEOC_MCP {
             ] ] ] );
         }
 
-        $post = get_post( $post_id );
-        if ( ! $post ) {
+        if ( ! in_array( 'content', $allowed, true ) ) {
+            return self::make_error( $id, -32602, "Tool group 'content' is disabled. Enable it in AI SEO Connector settings." );
+        }
+
+        // Anything that isn't a published, non-password-protected post of a
+        // public type is reported as not found, without saying why.
+        if ( ! $post
+            || $post->post_type !== $type
+            || ! in_array( $post->post_type, AISEOC_Content::allowed_post_types(), true )
+            || $post->post_status !== 'publish'
+            || $post->post_password !== '' ) {
             return self::make_error( $id, -32602, "Post not found: {$post_id}" );
         }
 
-        $raw_meta  = get_post_meta( $post_id );
-        $flat_meta = array_map( fn( $v ) => count( $v ) === 1 ? $v[0] : $v, $raw_meta );
         $terms_out = [];
         foreach ( get_post_taxonomies( $post ) as $tax ) {
             $t = wp_get_post_terms( $post_id, $tax );
@@ -357,7 +360,7 @@ class AISEOC_MCP {
             'url'      => get_permalink( $post_id ),
             'slug'     => $post->post_name,
             'terms'    => $terms_out,
-            'meta'     => $flat_meta,
+            'meta'     => AISEOC_Content::safe_post_meta( $post_id ),
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
 
         return self::make_result( $id, [ 'contents' => [ [
@@ -375,7 +378,7 @@ class AISEOC_MCP {
         return self::make_result( $id, [ 'prompts' => [
             [
                 'name'        => 'seo_blog_post',
-                'description' => 'Create a fully SEO-optimised blog post with Yoast meta, featured image, and publish',
+                'description' => 'Create a fully SEO-optimised blog post with SEO meta (Yoast or RankMath), featured image, and publish',
                 'arguments'   => [
                     [ 'name' => 'topic',      'description' => 'Blog post topic',       'required' => true  ],
                     [ 'name' => 'keyword',    'description' => 'Primary focus keyword', 'required' => true  ],
@@ -423,7 +426,7 @@ Steps:
 1. `create_post` — status=draft, title optimised for `{$kw}` (≤60 chars), body {$wc} words using the keyword naturally
 2. `yoast_set_meta` — seo_title ≤60 chars (keyword near start), meta_description ≤155 chars with a CTA, focus_keyword=\"{$kw}\"
 3. Find a relevant image URL, `upload_media`, then `set_featured_image`
-4. `yoast_audit` — fix any red/orange issues until score ≥ 70
+4. `yoast_audit` — fix any red/orange issues until score_percent is 70 or higher
 5. `update_post` status=publish" ] ] ],
                 ] );
 
@@ -474,13 +477,13 @@ Steps:
         $theme = wp_get_theme()->get( 'Name' );
         $parts = [ "Connected to WordPress \"{$name}\" at {$url} (WP {$ver}, theme: {$theme})." ];
 
-        if ( defined( 'WPSEO_VERSION' ) )     $parts[] = 'Yoast SEO active.';
-        if ( defined( 'RANK_MATH_VERSION' ) ) $parts[] = 'RankMath active (this plugin only reads/writes Yoast meta keys today -- RankMath fields are not yet supported).';
+        if ( defined( 'WPSEO_VERSION' ) )     $parts[] = 'Yoast SEO active (SEO meta is read and written through Yoast).';
+        if ( defined( 'RANK_MATH_VERSION' ) ) $parts[] = 'RankMath active (SEO meta is read and written through RankMath).';
 
-        $allowed = json_decode( get_option( 'aiseoc_allowed_actions', '[]' ), true );
+        $allowed = AISEOC_Router::allowed_groups();
         $parts[] = 'Enabled groups: ' . implode( ', ', $allowed ) . '.';
         $parts[] = 'Use resources/list to browse posts/pages/media. Use prompts/list for workflow templates.';
-        $parts[] = 'Call flush_cache after bulk changes so fixes are visible immediately, not stuck behind a stale cache.';
+        $parts[] = 'Writes to a post clear the caches for that post (WordPress object cache plus supported page-cache plugins) and report them in caches_purged. After bulk or media changes, call flush_cache. CDN/edge caches such as Cloudflare are not cleared.';
 
         return implode( ' ', $parts );
     }
@@ -513,11 +516,12 @@ Steps:
     private static function arr( string $d ): array { return [ 'type' => 'array', 'description' => $d ]; }
 
     /* ════════════════════════════════════════════════════════
-     *  Tool definitions (MCP schema — mirrors class-router.php's
-     *  tool_manifest(), but with full input schemas for MCP clients)
+     *  Tool definitions: name, description and input schema for every
+     *  tool. The router's /capabilities list is built from these, and the
+     *  group each tool belongs to comes from AISEOC_Router::registry().
      * ════════════════════════════════════════════════════════ */
 
-    private static function tool_definitions(): array {
+    public static function tool_definitions(): array {
         return [
             /* ── Content ── */
             self::tool( 'create_post',
@@ -576,8 +580,8 @@ Steps:
             ], [ 'post_id' ] ),
 
             /* ── SEO ── */
-            self::tool( 'yoast_get_meta', 'Get all Yoast SEO meta for a post.', [ 'post_id' => self::i( 'Post ID.' ) ], [ 'post_id' ] ),
-            self::tool( 'yoast_set_meta', 'Set Yoast SEO meta (title, description, robots, og, canonical, schema).', [
+            self::tool( 'yoast_get_meta', 'Get all SEO meta for a post (title, description, focus keyword, canonical, OpenGraph, Twitter, robots) from whichever SEO plugin is active, Yoast SEO or RankMath. Despite the yoast_ name it works with both.', [ 'post_id' => self::i( 'Post ID.' ) ], [ 'post_id' ] ),
+            self::tool( 'yoast_set_meta', 'Set SEO meta (title, description, robots, OpenGraph, Twitter, canonical, schema) on whichever SEO plugin is active, Yoast SEO or RankMath. Despite the yoast_ name it works with both. Only the fields you send are changed.', [
                 'post_id'           => self::i( 'Post ID.' ),
                 'seo_title'         => self::s( 'SEO title, ideally ≤60 chars.' ),
                 'meta_description'  => self::s( 'Meta description, ideally ≤155 chars.' ),
@@ -585,13 +589,19 @@ Steps:
                 'canonical_url'     => self::s( 'Canonical URL override.' ),
                 'og_title'          => self::s( 'OpenGraph title.' ),
                 'og_description'    => self::s( 'OpenGraph description.' ),
+                'og_image'          => self::s( 'OpenGraph image URL.' ),
                 'twitter_title'     => self::s( 'Twitter card title.' ),
                 'twitter_description' => self::s( 'Twitter card description.' ),
-                'noindex'           => self::s( 'Robots noindex flag.' ),
-                'nofollow'          => self::s( 'Robots nofollow flag.' ),
+                'twitter_image'     => self::s( 'Twitter card image URL.' ),
+                'noindex'           => self::b( 'true = add noindex (hide the page from search engines); false = remove the page-level noindex.' ),
+                'nofollow'          => self::b( 'true = add nofollow; false = remove it.' ),
+                'is_cornerstone'    => self::s( 'Mark as cornerstone (Yoast) / pillar (RankMath) content.' ),
+                'primary_category'  => self::s( 'Primary category term ID.' ),
+                'schema_article_type' => self::s( 'Schema article type (Yoast only; ignored on RankMath).' ),
+                'schema_page_type'  => self::s( 'Schema page type (Yoast only; ignored on RankMath).' ),
+                'raw'               => self::o( 'Advanced: raw meta keys to write. Keys must start with _yoast_ (Yoast) or rank_math_ (RankMath).' ),
             ], [ 'post_id' ] ),
-            self::tool( 'yoast_audit', 'Run a readability/keyword audit and return recommendations.', [ 'post_id' => self::i( 'Post ID.' ) ], [ 'post_id' ] ),
-            self::tool( 'yoast_sitemap_ping', 'Ping search engines with updated sitemap.' ),
+            self::tool( 'yoast_audit', 'Audit a post\'s SEO basics (title and description length, focus keyword, featured image, content length) and return issues plus a score and score_percent.', [ 'post_id' => self::i( 'Post ID.' ) ], [ 'post_id' ] ),
 
             /* ── Media ── */
             self::tool( 'upload_media', 'Upload an image/file from URL or base64 to the media library.', [
@@ -635,10 +645,12 @@ Steps:
             self::tool( 'list_plugins', 'List installed plugins with name, version, and active status. Read-only -- cannot install/activate/deactivate.', [
                 'active_only' => self::b( 'If true, return only active plugins.' ),
             ] ),
-            self::tool( 'get_options', 'Read specific wp_options by key. Sensitive keys (auth salts, this plugin\'s own token, etc.) are always blocked and returned as "[blocked]".', [
+            self::tool( 'get_options', 'Read specific wp_options by key. Only a short list of site-setting keys can be read (show_on_front, page_on_front, page_for_posts, blogname, blogdescription, permalink_structure, timezone_string, gmt_offset, blog_public); every other key is returned as "[blocked]".', [
                 'keys' => self::arr( 'Option key names to read.' ),
             ] ),
-            self::tool( 'flush_cache', 'Flush the WordPress object cache, e.g. after applying a fix so it is visible immediately.' ),
+            self::tool( 'flush_cache', 'Clear caches so a fix shows up: the WordPress object cache plus the page cache of supported cache plugins (WP Rocket, LiteSpeed, W3 Total Cache, WP Super Cache, WP Fastest Cache, SiteGround). Returns which caches were cleared. CDN/edge caches are not included.', [
+                'post_id' => self::i( 'Clear only the caches for this post. Omit to clear everything.' ),
+            ] ),
         ];
     }
 }
