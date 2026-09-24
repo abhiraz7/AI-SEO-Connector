@@ -88,7 +88,6 @@ register_activation_hook( __FILE__, function () {
     $token = bin2hex( random_bytes( 32 ) );
     add_option( 'aiseoc_api_token', $token );
     add_option( 'aiseoc_enabled',   '1' );
-    add_option( 'aiseoc_log_level', 'info' );
     add_option( 'aiseoc_allowed_actions', json_encode( [
         'content', 'seo', 'media', 'site',
     ] ) );

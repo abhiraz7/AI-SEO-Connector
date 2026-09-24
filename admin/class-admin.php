@@ -69,7 +69,6 @@ class AISEOC_Admin {
     public static function ajax_save(): void {
         self::guard();
 
-        update_option( 'aiseoc_log_level', sanitize_key( $_POST['log_level'] ?? 'info' ) );
 
         $actions = array_map( 'sanitize_key', (array) ( $_POST['allowed_actions'] ?? [] ) );
         $actions = array_values( array_intersect( $actions, self::KNOWN_GROUPS ) );

@@ -29,7 +29,7 @@ function aiseoc_uninstall_site(): void {
     $options = array_merge(
         array_values( $legacy ),
         array_keys( $legacy ),
-        [ 'aiseoc_last_contact', 'aiseoc_app_password', 'vtseo_app_password' ]
+        [ 'aiseoc_last_contact', 'aiseoc_app_password', 'vtseo_app_password', 'aiseoc_log_level', 'vtseo_log_level' ]
     );
     foreach ( array_unique( $options ) as $option ) {
         delete_option( $option );

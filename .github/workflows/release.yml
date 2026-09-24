@@ -25,6 +25,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check the tag matches the plugin version and CHANGELOG
+        run: |
+          # A tag that doesn't match the version inside the plugin makes every
+          # site show "update available" forever, so fail before building.
+          TAG="${GITHUB_REF_NAME#v}"
+          HEADER=$(sed -n -E 's/^ \* Version:[[:space:]]*([^[:space:]]+).*/\1/p' ai-seo-connector.php | head -n1 | tr -d '\r')
+          CONST=$(sed -n -E "s/^define\( 'AISEOC_VERSION',[[:space:]]*'([^']+)' \);.*/\1/p" ai-seo-connector.php | head -n1 | tr -d '\r')
+          echo "tag=$TAG  header=$HEADER  AISEOC_VERSION=$CONST"
+          [ "$HEADER" = "$TAG" ] || { echo "::error::Tag $TAG does not match the plugin header Version ($HEADER)"; exit 1; }
+          [ "$CONST" = "$TAG" ]  || { echo "::error::Tag $TAG does not match AISEOC_VERSION ($CONST)"; exit 1; }
+
+          # Release notes come from CHANGELOG.md, so an entry is required.
+          awk -v tag="$TAG" 'index($0, "## [" tag "]") == 1 {found=1; next} found && index($0, "## [") == 1 {exit} found' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+          [ -s "$RUNNER_TEMP/release-notes.md" ] || { echo "::error::CHANGELOG.md has no entry for $TAG"; exit 1; }
+
       - name: Build plugin zip
         run: |
           # Zip the whole repo into a "ai-seo-connector/" top-level folder, the
@@ -49,4 +64,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: ai-seo-connector.zip
+          # The CHANGELOG entry for this version, followed by GitHub's
+          # generated list of merged pull requests.
+          body_path: ${{ runner.temp }}/release-notes.md
           generate_release_notes: true

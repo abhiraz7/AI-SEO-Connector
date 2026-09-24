@@ -12,7 +12,6 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 return [
     'vtseo_api_token'       => 'aiseoc_api_token',
     'vtseo_enabled'         => 'aiseoc_enabled',
-    'vtseo_log_level'       => 'aiseoc_log_level',
     'vtseo_allowed_actions' => 'aiseoc_allowed_actions',
     'vtseo_app_username'    => 'aiseoc_app_username',
     // Activity log isn't part of auth/connection state, but carrying it

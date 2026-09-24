@@ -8,9 +8,10 @@
  *      (Also reachable under the compatibility alias namespace -- see
  *      class-router.php.)
  *
- * GET  /wp-json/aiseoc/v1/mcp  — SSE keep-alive channel
- *      Requires Accept: text/event-stream; streams ": ping"
- *      comments every 15 s for up to 5 minutes.
+ * GET  /wp-json/aiseoc/v1/mcp  — answers 405 (Allow: POST). This server
+ *      has no server-initiated messages, and the spec lets a server that
+ *      offers no GET stream say so. (A held-open stream would tie up one
+ *      PHP worker per connection.)
  *
  * Spec: MCP protocol version 2024-11-05, Streamable HTTP transport.
  */
@@ -57,14 +58,22 @@ class AISEOC_MCP {
     }
 
     public static function handle_get( WP_REST_Request $request ) {
-        $accept = $request->get_header( 'accept' ) ?? '';
-        if ( strpos( $accept, 'text/event-stream' ) === false ) {
-            return new WP_REST_Response(
-                [ 'error' => 'GET /mcp requires Accept: text/event-stream' ],
-                400
-            );
+        return new WP_REST_Response(
+            [ 'error' => 'GET is not supported on /mcp. Send JSON-RPC requests with POST.' ],
+            405
+        );
+    }
+
+    /**
+     * WordPress builds the Allow header from the methods registered on a
+     * route, so it would advertise GET even though GET answers 405. Correct
+     * it for this route only (hooked to rest_post_dispatch in the router).
+     */
+    public static function fix_allow_header( $response, $server, $request ) {
+        if ( $request->get_method() === 'GET' && preg_match( '#^/(aiseoc|vtseo)/v1/mcp$#', $request->get_route() ) ) {
+            $response->header( 'Allow', 'POST' );
         }
-        self::open_sse_stream(); // never returns
+        return $response;
     }
 
     /* ════════════════════════════════════════════════════════
@@ -91,25 +100,6 @@ class AISEOC_MCP {
         exit;
     }
 
-    private static function open_sse_stream(): void {
-        while ( ob_get_level() > 0 ) { ob_end_clean(); }
-        ob_implicit_flush( true );
-
-        header( 'Content-Type: text/event-stream; charset=UTF-8' );
-        header( 'Cache-Control: no-cache, no-store' );
-        header( 'X-Accel-Buffering: no' );
-
-        $start = time();
-        while ( ! connection_aborted() && ( time() - $start ) < 300 ) {
-            echo ": ping\n\n";
-            @ob_flush(); flush();
-            sleep( 15 );
-        }
-
-        AISEOC_Logger::log( 'info', 'MCP SSE channel closed' );
-        exit;
-    }
-
     /* ════════════════════════════════════════════════════════
      *  JSON-RPC 2.0 dispatcher
      * ════════════════════════════════════════════════════════ */
@@ -126,25 +116,37 @@ class AISEOC_MCP {
 
         switch ( $method ) {
             case 'initialize':
-                return self::handle_initialize( $id, $params );
+                $response = self::handle_initialize( $id, $params );
+                break;
             case 'ping':
-                return self::make_result( $id, new stdClass() );
+                $response = self::make_result( $id, new stdClass() );
+                break;
             case 'tools/list':
-                return self::handle_tools_list( $id );
+                $response = self::handle_tools_list( $id );
+                break;
             case 'tools/call':
-                return self::handle_tools_call( $id, $params );
+                $response = self::handle_tools_call( $id, $params );
+                break;
             case 'resources/list':
-                return self::handle_resources_list( $id, $params );
+                $response = self::handle_resources_list( $id, $params );
+                break;
             case 'resources/read':
-                return self::handle_resource_read( $id, $params );
+                $response = self::handle_resource_read( $id, $params );
+                break;
             case 'prompts/list':
-                return self::handle_prompts_list( $id );
+                $response = self::handle_prompts_list( $id );
+                break;
             case 'prompts/get':
-                return self::handle_prompt_get( $id, $params );
+                $response = self::handle_prompt_get( $id, $params );
+                break;
             default:
-                if ( $is_notification ) return null;
-                return self::make_error( $id, -32601, "Method not found: {$method}" );
+                $response = self::make_error( $id, -32601, "Method not found: {$method}" );
         }
+
+        // JSON-RPC: a message without an id is a notification and must not
+        // get a reply, whatever the method (this also covers notifications
+        // such as notifications/initialized that we don't act on).
+        return $is_notification ? null : $response;
     }
 
     /* ════════════════════════════════════════════════════════
@@ -177,34 +179,12 @@ class AISEOC_MCP {
     private static function handle_tools_list( $id ): array {
         $allowed = AISEOC_Router::allowed_groups();
 
-        $group_map = [
-            'create_post'             => 'content',
-            'update_post'             => 'content',
-            'get_post'                => 'content',
-            'list_posts'              => 'content',
-            'delete_post'             => 'content',
-            'schedule_post'           => 'content',
-            'set_featured_image'      => 'content',
-            'get_taxonomies'          => 'content',
-            'assign_terms'            => 'content',
-            'yoast_get_meta'          => 'seo',
-            'yoast_set_meta'          => 'seo',
-            'yoast_audit'             => 'seo',
-            'upload_media'            => 'media',
-            'list_media'              => 'media',
-            'get_media'               => 'media',
-            'delete_media'            => 'media',
-            'update_media_meta'       => 'media',
-            'update_media_alt_by_url' => 'media',
-            'get_site_info'           => 'site',
-            'list_plugins'            => 'site',
-            'get_options'             => 'site',
-            'flush_cache'             => 'site',
-        ];
+        // The tool -> group mapping lives in one place: AISEOC_Router::registry().
+        $registry = AISEOC_Router::registry();
 
         $tools = array_values( array_filter(
             self::tool_definitions(),
-            fn( $t ) => in_array( $group_map[ $t['name'] ] ?? '', $allowed, true )
+            fn( $t ) => in_array( $registry[ $t['name'] ][2] ?? '', $allowed, true )
         ) );
 
         return self::make_result( $id, [ 'tools' => $tools ] );
@@ -536,11 +516,12 @@ Steps:
     private static function arr( string $d ): array { return [ 'type' => 'array', 'description' => $d ]; }
 
     /* ════════════════════════════════════════════════════════
-     *  Tool definitions (MCP schema — mirrors class-router.php's
-     *  tool_manifest(), but with full input schemas for MCP clients)
+     *  Tool definitions: name, description and input schema for every
+     *  tool. The router's /capabilities list is built from these, and the
+     *  group each tool belongs to comes from AISEOC_Router::registry().
      * ════════════════════════════════════════════════════════ */
 
-    private static function tool_definitions(): array {
+    public static function tool_definitions(): array {
         return [
             /* ── Content ── */
             self::tool( 'create_post',
