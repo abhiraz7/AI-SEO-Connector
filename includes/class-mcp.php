@@ -5,7 +5,7 @@
  * POST /wp-json/aiseoc/v1/mcp  — JSON-RPC request (single or batch)
  *      If request has Accept: text/event-stream → each response
  *      object is streamed as an SSE "message" event before exit.
- *      (Also reachable at the legacy /wp-json/vtseo/v1/mcp path -- see
+ *      (Also reachable under the compatibility alias namespace -- see
  *      class-router.php.)
  *
  * GET  /wp-json/aiseoc/v1/mcp  — SSE keep-alive channel

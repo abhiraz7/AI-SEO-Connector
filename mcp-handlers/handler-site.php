@@ -4,8 +4,7 @@
  * narrow, allow-listed writes/reads that on-page fixes actually need.
  * Deliberately does NOT include: activate/deactivate/install plugin,
  * theme switching, user management, site-wide search/replace, wp_options
- * writes, or PHP execution -- those live in the full claude-wp-mcp
- * developer plugin, not here. See README.md.
+ * writes, or PHP execution. See README.md.
  */
 class AISEOC_Site {
 
@@ -21,11 +20,11 @@ class AISEOC_Site {
         'auth_salt', 'secure_auth_salt', 'logged_in_salt', 'nonce_salt',
         'wp_user_roles', 'default_role',
         'aiseoc_api_token', 'aiseoc_app_password', 'aiseoc_allowed_actions',
-        // Old pre-rename (VtechSEO Agent) option names -- a site migrated from
-        // the old plugin identity may still have these lingering in wp_options
-        // even after the new aiseoc_* values take over, so keep blocking them
-        // too rather than assuming they're gone. Safe to drop once confirmed
-        // no live site still carries them.
+        // Option names used by earlier releases -- a site migrated from them
+        // may still have these lingering in wp_options even after the
+        // aiseoc_* values take over, so keep blocking them too rather than
+        // assuming they're gone. Safe to drop once confirmed no live site
+        // still carries them.
         'vtseo_api_token', 'vtseo_app_password', 'vtseo_allowed_actions',
     ];
 
