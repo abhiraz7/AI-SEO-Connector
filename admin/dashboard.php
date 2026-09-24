@@ -446,7 +446,6 @@ foreach ( $logs as $entry ) {
     const fd = new FormData();
     fd.append('action', 'aiseoc_save');
     fd.append('nonce', nonce);
-    fd.append('log_level', 'info');
     document.querySelectorAll('input[name="aiseoc_actions[]"]:checked').forEach(c => fd.append('allowed_actions[]', c.value));
     fetch(ajaxurl, { method: 'POST', body: fd })
       .then(r => r.json()).then(d => toast(d.success ? 'Access scope saved.' : 'Error saving.', d.success));

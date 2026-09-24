@@ -32,6 +32,8 @@ class AISEOC_Router {
     public static function register_routes() {
         $perm = [ 'AISEOC_Auth', 'permission_callback' ];
 
+        add_filter( 'rest_post_dispatch', [ 'AISEOC_MCP', 'fix_allow_header' ], 20, 3 );
+
         $routes = [
             '/ping' => [
                 'methods'             => 'GET',
@@ -90,9 +92,19 @@ class AISEOC_Router {
     }
 
     public static function capabilities(): WP_REST_Response {
-        return new WP_REST_Response( [
-            'tools' => self::tool_manifest(),
-        ] );
+        // Name, group and description of every tool, built from the registry
+        // (group) and the MCP definitions (description) so they can't drift.
+        $registry = self::registry();
+        $tools    = [];
+        foreach ( AISEOC_MCP::tool_definitions() as $def ) {
+            if ( ! isset( $registry[ $def['name'] ] ) ) continue;
+            $tools[] = [
+                'name'        => $def['name'],
+                'group'       => $registry[ $def['name'] ][2],
+                'description' => $def['description'],
+            ];
+        }
+        return new WP_REST_Response( [ 'tools' => $tools ] );
     }
 
     public static function get_logs(): WP_REST_Response {
@@ -144,7 +156,7 @@ class AISEOC_Router {
      * Throws on unknown tool, disabled group, or handler error.
      */
     public static function call_tool( string $tool, array $params, array $allowed ) {
-        $handlers = self::get_handlers();
+        $handlers = self::registry();
 
         if ( ! isset( $handlers[ $tool ] ) ) {
             throw new InvalidArgumentException( "Unknown tool: {$tool}" );
@@ -160,7 +172,12 @@ class AISEOC_Router {
         return call_user_func( [ $class, $method ], $params );
     }
 
-    private static function get_handlers(): array {
+    /**
+     * The one list of tools: name => [ class, method, group ]. The MCP tool
+     * list, /capabilities and group gating all read from here, so adding a
+     * tool means one line here plus its definition in AISEOC_MCP.
+     */
+    public static function registry(): array {
         return [
             /* Content */
             'create_post'            => [ 'AISEOC_Content', 'create_post',        'content' ],
@@ -188,40 +205,6 @@ class AISEOC_Router {
             'list_plugins'           => [ 'AISEOC_Site', 'list_plugins',  'site' ],
             'get_options'            => [ 'AISEOC_Site', 'get_options',   'site' ],
             'flush_cache'            => [ 'AISEOC_Site', 'flush_cache',   'site' ],
-        ];
-    }
-
-    private static function tool_manifest(): array {
-        return [
-            /* ── Content ── */
-            [ 'name' => 'create_post',            'group' => 'content', 'description' => 'Create any post type (post, page, custom). Supports scheduling, excerpt, password, custom fields.' ],
-            [ 'name' => 'update_post',            'group' => 'content', 'description' => 'Update any field of an existing post.' ],
-            [ 'name' => 'get_post',               'group' => 'content', 'description' => 'Get full post data including meta and terms.' ],
-            [ 'name' => 'list_posts',             'group' => 'content', 'description' => 'List posts with filters (type, status, author, date, search).' ],
-            [ 'name' => 'delete_post',            'group' => 'content', 'description' => 'Trash or permanently delete a post.' ],
-            [ 'name' => 'schedule_post',          'group' => 'content', 'description' => 'Schedule a post to publish at a specific datetime.' ],
-            [ 'name' => 'set_featured_image',     'group' => 'content', 'description' => 'Set or remove the featured image on a post.' ],
-            [ 'name' => 'get_taxonomies',         'group' => 'content', 'description' => 'List all taxonomies and their terms.' ],
-            [ 'name' => 'assign_terms',           'group' => 'content', 'description' => 'Add/set/remove taxonomy terms on a post.' ],
-
-            /* ── SEO ── */
-            [ 'name' => 'yoast_get_meta',         'group' => 'seo', 'description' => 'Get all SEO meta for a post from whichever SEO plugin is active (Yoast SEO or RankMath).' ],
-            [ 'name' => 'yoast_set_meta',         'group' => 'seo', 'description' => 'Set SEO meta (title, description, robots, og, canonical, schema) on whichever SEO plugin is active (Yoast SEO or RankMath).' ],
-            [ 'name' => 'yoast_audit',            'group' => 'seo', 'description' => 'Audit a post SEO basics (title/description length, focus keyword, featured image, content length); returns issues, a score and score_percent.' ],
-
-            /* ── Media ── */
-            [ 'name' => 'upload_media',            'group' => 'media', 'description' => 'Upload an image/file from URL or base64 to the media library.' ],
-            [ 'name' => 'list_media',              'group' => 'media', 'description' => 'Search and list media library items.' ],
-            [ 'name' => 'get_media',               'group' => 'media', 'description' => 'Get a single media item with all sizes and meta.' ],
-            [ 'name' => 'delete_media',            'group' => 'media', 'description' => 'Delete a media item.' ],
-            [ 'name' => 'update_media_meta',       'group' => 'media', 'description' => 'Update alt text, caption, title, description by media_id.' ],
-            [ 'name' => 'update_media_alt_by_url', 'group' => 'media', 'description' => 'Update alt text for an attachment by its public URL -- resolves the URL to a media_id first via WordPress core, for images (e.g. logo, theme header images) where the caller only has the rendered <img src>, not the internal attachment ID.' ],
-
-            /* ── Site ── */
-            [ 'name' => 'get_site_info',          'group' => 'site', 'description' => 'Get WordPress site info: name, URL, version, active theme, post/user/media counts.' ],
-            [ 'name' => 'list_plugins',           'group' => 'site', 'description' => 'List installed plugins (name, version, active status) -- read-only, no install/activate/deactivate.' ],
-            [ 'name' => 'get_options',             'group' => 'site', 'description' => 'Read specific wp_options by key. Only a short list of site-setting keys can be read (e.g. show_on_front, page_on_front, blogname, permalink_structure); every other key is returned as [blocked].' ],
-            [ 'name' => 'flush_cache',             'group' => 'site', 'description' => 'Clear the object cache and supported page caches, for one post (post_id) or the whole site. Returns which caches were cleared.' ],
         ];
     }
 }
