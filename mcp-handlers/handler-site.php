@@ -9,23 +9,22 @@
 class AISEOC_Site {
 
     /**
-     * wp_options keys that must never be read via the API, even though
-     * get_options() is otherwise a read tool. Reading these could hand an
-     * attacker who obtained the token everything needed to escalate
-     * further (auth salts) or reveal this plugin's own credentials.
+     * The only wp_options keys get_options() will return. Everything else --
+     * credentials, other plugins' settings, this plugin's own data -- comes
+     * back as "[blocked]". An allow-list, not a block-list: a block-list has
+     * to know every secret every installed plugin will ever store, this
+     * doesn't. Add a key here only when a real feature needs to read it.
      */
-    const BLOCKED_OPTION_KEYS = [
-        'siteurl', 'home', 'admin_email',
-        'auth_key', 'secure_auth_key', 'logged_in_key', 'nonce_key',
-        'auth_salt', 'secure_auth_salt', 'logged_in_salt', 'nonce_salt',
-        'wp_user_roles', 'default_role',
-        'aiseoc_api_token', 'aiseoc_app_password', 'aiseoc_allowed_actions',
-        // Option names used by earlier releases -- a site migrated from them
-        // may still have these lingering in wp_options even after the
-        // aiseoc_* values take over, so keep blocking them too rather than
-        // assuming they're gone. Safe to drop once confirmed no live site
-        // still carries them.
-        'vtseo_api_token', 'vtseo_app_password', 'vtseo_allowed_actions',
+    const READABLE_OPTION_KEYS = [
+        'show_on_front',        // homepage: latest posts or a static page
+        'page_on_front',        // which page is the static homepage
+        'page_for_posts',       // which page shows the blog
+        'blogname',
+        'blogdescription',
+        'permalink_structure',
+        'timezone_string',
+        'gmt_offset',
+        'blog_public',          // "discourage search engines" setting
     ];
 
     /* ── Site info ("what's running here") ────────────────── */
@@ -75,17 +74,15 @@ class AISEOC_Site {
         return [ 'plugins' => $result ];
     }
 
-    /* ── Read specific wp_options (narrow allow-list gate) ──── */
+    /* ── Read specific wp_options (allow-list) ─────────────── */
     public static function get_options( array $p ): array {
         $keys   = (array) ( $p['keys'] ?? [] );
         $result = [];
         foreach ( $keys as $key ) {
             $clean = sanitize_key( $key );
-            if ( in_array( $clean, self::BLOCKED_OPTION_KEYS, true ) ) {
-                $result[ $clean ] = '[blocked]';
-                continue;
-            }
-            $result[ $clean ] = get_option( $clean );
+            $result[ $clean ] = in_array( $clean, self::READABLE_OPTION_KEYS, true )
+                ? get_option( $clean )
+                : '[blocked]';
         }
         return $result;
     }

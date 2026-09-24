@@ -4,6 +4,20 @@ class AISEOC_Content {
     const MAX_PER_PAGE     = 100;
     const ALLOWED_STATUSES = [ 'draft', 'publish', 'private', 'pending', 'future', 'trash' ];
 
+    /**
+     * Meta keys matching these prefixes are never returned or written:
+     * payment/order/customer data (e.g. WooCommerce order fields) and
+     * WordPress/plugin internals.
+     */
+    const BLOCKED_META_PREFIXES = [
+        '_stripe_', '_paypal_', '_wc_', '_edd_', '_password', '_auth_', 'session_',
+        '_transient_', 'auth_key', '_billing_', '_shipping_', '_customer_', '_order_',
+        '_payment_', '_transaction_', '_wp_', '_edit_', 'aiseoc_',
+    ];
+
+    /** Meta keys containing any of these are treated as secrets. */
+    const BLOCKED_META_WORDS = [ 'password', 'secret', 'token', 'api_key', 'apikey', 'private_key' ];
+
     /* ── Create post ─────────────────────────────────────── */
     public static function create_post( array $p ): array {
         $status = sanitize_key( $p['status'] ?? 'draft' );
@@ -11,14 +25,26 @@ class AISEOC_Content {
             $status = 'draft';
         }
 
+        $type = sanitize_key( $p['type'] ?? 'post' );
+        if ( ! in_array( $type, self::allowed_post_types(), true ) ) {
+            throw new InvalidArgumentException( "Post type '{$type}' is not supported." );
+        }
+
+        $author = intval( $p['author_id'] ?? get_current_user_id() );
+        if ( isset( $p['author_id'] ) && ! get_userdata( $author ) ) {
+            throw new InvalidArgumentException( "User #{$author} does not exist." );
+        }
+
+        $meta = self::checked_meta( $p['meta'] ?? [] );
+
         $args = [
             'post_title'    => sanitize_text_field( $p['title'] ?? 'Untitled' ),
             'post_content'  => wp_kses_post( $p['content'] ?? '' ),
             'post_status'   => $status,
-            'post_type'     => sanitize_key( $p['type'] ?? 'post' ),
+            'post_type'     => $type,
             'post_excerpt'  => sanitize_textarea_field( $p['excerpt'] ?? '' ),
             'post_password' => sanitize_text_field( $p['password'] ?? '' ),
-            'post_author'   => intval( $p['author_id'] ?? get_current_user_id() ),
+            'post_author'   => $author,
             'comment_status'=> in_array( $p['comment_status'] ?? 'open', [ 'open', 'closed' ], true )
                                ? $p['comment_status'] : 'open',
         ];
@@ -36,15 +62,13 @@ class AISEOC_Content {
         $post_id = self::save_post( $args );
         if ( is_wp_error( $post_id ) ) throw new Exception( $post_id->get_error_message() );
 
-        if ( ! empty( $p['meta'] ) && is_array( $p['meta'] ) ) {
-            foreach ( $p['meta'] as $key => $value ) {
-                update_post_meta( $post_id, sanitize_key( $key ), $value );
-            }
+        foreach ( $meta as $key => $value ) {
+            update_post_meta( $post_id, $key, $value );
         }
 
         if ( ! empty( $p['terms'] ) && is_array( $p['terms'] ) ) {
             foreach ( $p['terms'] as $taxonomy => $term_ids ) {
-                wp_set_post_terms( $post_id, array_map( 'intval', $term_ids ), sanitize_key( $taxonomy ) );
+                wp_set_post_terms( $post_id, array_map( 'intval', (array) $term_ids ), sanitize_key( $taxonomy ) );
             }
         }
 
@@ -56,7 +80,9 @@ class AISEOC_Content {
     public static function update_post( array $p ): array {
         $post_id = intval( $p['post_id'] ?? 0 );
         if ( ! $post_id ) throw new Exception( 'post_id required.' );
+        self::require_post( $post_id );
 
+        $meta = self::checked_meta( $p['meta'] ?? [] );
         $args = [ 'ID' => $post_id ];
 
         if ( isset( $p['title'] ) )   $args['post_title']   = sanitize_text_field( $p['title'] );
@@ -78,10 +104,8 @@ class AISEOC_Content {
         $result = self::save_post( $args );
         if ( is_wp_error( $result ) ) throw new Exception( $result->get_error_message() );
 
-        if ( ! empty( $p['meta'] ) ) {
-            foreach ( $p['meta'] as $key => $value ) {
-                update_post_meta( $post_id, sanitize_key( $key ), $value );
-            }
+        foreach ( $meta as $key => $value ) {
+            update_post_meta( $post_id, $key, $value );
         }
 
         AISEOC_Logger::log( 'info', "Updated post #{$post_id}" );
@@ -95,8 +119,7 @@ class AISEOC_Content {
     /* ── Get post ─────────────────────────────────────────── */
     public static function get_post( array $p ): array {
         $post_id = intval( $p['post_id'] ?? 0 );
-        $post    = get_post( $post_id );
-        if ( ! $post ) throw new Exception( "Post #{$post_id} not found." );
+        $post    = self::require_post( $post_id );
 
         $meta         = self::safe_post_meta( $post_id );
         $thumbnail_id = get_post_thumbnail_id( $post_id );
@@ -124,8 +147,13 @@ class AISEOC_Content {
     public static function list_posts( array $p ): array {
         $per_page = min( intval( $p['per_page'] ?? 20 ), self::MAX_PER_PAGE );
 
+        $type = sanitize_key( $p['type'] ?? 'post' );
+        if ( ! in_array( $type, self::allowed_post_types(), true ) ) {
+            throw new InvalidArgumentException( "Post type '{$type}' is not supported." );
+        }
+
         $args = [
-            'post_type'      => sanitize_key( $p['type'] ?? 'post' ),
+            'post_type'      => $type,
             'post_status'    => 'publish', // default to published only for security
             'posts_per_page' => $per_page,
             'paged'          => max( 1, intval( $p['page'] ?? 1 ) ),
@@ -159,6 +187,7 @@ class AISEOC_Content {
     /* ── Delete post ─────────────────────────────────────── */
     public static function delete_post( array $p ): array {
         $post_id  = intval( $p['post_id'] ?? 0 );
+        self::require_post( $post_id );
         $force    = ! empty( $p['force'] );
         $result   = wp_delete_post( $post_id, $force );
         if ( ! $result ) throw new Exception( "Could not delete post #{$post_id}." );
@@ -171,6 +200,7 @@ class AISEOC_Content {
         $post_id = intval( $p['post_id'] ?? 0 );
         $date    = sanitize_text_field( $p['date'] ?? '' );
         if ( ! $post_id || ! $date ) throw new Exception( 'post_id and date required.' );
+        self::require_post( $post_id );
 
         $result = self::save_post( [
             'ID'            => $post_id,
@@ -192,6 +222,7 @@ class AISEOC_Content {
         $post_id  = intval( $p['post_id'] ?? 0 );
         $media_id = intval( $p['media_id'] ?? 0 );
         if ( ! $post_id ) throw new Exception( 'post_id required.' );
+        self::require_post( $post_id );
 
         if ( $media_id ) {
             set_post_thumbnail( $post_id, $media_id );
@@ -222,15 +253,70 @@ class AISEOC_Content {
     /* ── Assign terms ────────────────────────────────────── */
     public static function assign_terms( array $p ): array {
         $post_id  = intval( $p['post_id'] ?? 0 );
+        $post     = self::require_post( $post_id );
         $taxonomy = sanitize_key( $p['taxonomy'] ?? 'category' );
-        $term_ids = array_map( 'intval', $p['term_ids'] ?? [] );
+        $term_ids = array_map( 'intval', (array) ( $p['term_ids'] ?? [] ) );
         $append   = ! empty( $p['append'] );
+
+        if ( ! is_object_in_taxonomy( $post->post_type, $taxonomy ) ) {
+            throw new InvalidArgumentException( "Taxonomy '{$taxonomy}' does not apply to this post type." );
+        }
 
         wp_set_post_terms( $post_id, $term_ids, $taxonomy, $append );
         return [ 'post_id' => $post_id, 'taxonomy' => $taxonomy, 'term_ids' => $term_ids ];
     }
 
     /* ── Helpers ─────────────────────────────────────────── */
+
+    /**
+     * Post types the content tools may touch: public ones (posts, pages,
+     * products...), excluding attachments, which have their own media tools.
+     * Private types such as orders, templates or changesets are out of reach.
+     */
+    public static function allowed_post_types(): array {
+        return array_values( array_diff( get_post_types( [ 'public' => true ] ), [ 'attachment' ] ) );
+    }
+
+    /**
+     * Load a post the content tools are allowed to touch. Posts of any other
+     * type are reported as "not found" so the API doesn't confirm they exist.
+     */
+    public static function require_post( int $post_id ): WP_Post {
+        $post = $post_id ? get_post( $post_id ) : null;
+        if ( ! $post || ! in_array( $post->post_type, self::allowed_post_types(), true ) ) {
+            throw new InvalidArgumentException( "Post #{$post_id} not found." );
+        }
+        return $post;
+    }
+
+    /** True if a meta key must never be read or written through this API. */
+    public static function is_blocked_meta_key( string $key ): bool {
+        $lower = strtolower( $key );
+        foreach ( self::BLOCKED_META_PREFIXES as $prefix ) {
+            if ( strpos( $lower, $prefix ) === 0 ) return true;
+        }
+        foreach ( self::BLOCKED_META_WORDS as $word ) {
+            if ( strpos( $lower, $word ) !== false ) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Validate caller-supplied meta before anything is saved, so a rejected
+     * key can't leave a half-finished create/update behind.
+     */
+    private static function checked_meta( $meta ): array {
+        if ( empty( $meta ) || ! is_array( $meta ) ) return [];
+        $clean = [];
+        foreach ( $meta as $key => $value ) {
+            $key = sanitize_key( $key );
+            if ( $key === '' || self::is_blocked_meta_key( $key ) ) {
+                throw new InvalidArgumentException( "Meta key '{$key}' can't be written through this API." );
+            }
+            $clean[ $key ] = $value;
+        }
+        return $clean;
+    }
 
     /**
      * Insert or update a post without re-filtering fields the caller didn't send.
@@ -272,24 +358,14 @@ class AISEOC_Content {
     }
 
     /**
-     * Return post meta with sensitive/internal keys stripped.
+     * Return post meta with sensitive/internal keys stripped. Used by both
+     * get_post and the MCP resources/read endpoint.
      */
-    private static function safe_post_meta( int $post_id ): array {
-        $blocked_prefixes = [
-            '_stripe_', '_paypal_', '_wc_', '_edd_', '_password',
-            '_auth_', 'session_', '_transient_', 'auth_key',
-        ];
-        $blocked_keys = [
-            '_wp_page_template', '_edit_lock', '_edit_last',
-        ];
-
+    public static function safe_post_meta( int $post_id ): array {
         $raw    = get_post_meta( $post_id );
         $result = [];
         foreach ( $raw as $key => $values ) {
-            if ( in_array( $key, $blocked_keys, true ) ) continue;
-            foreach ( $blocked_prefixes as $prefix ) {
-                if ( strpos( $key, $prefix ) === 0 ) continue 2;
-            }
+            if ( self::is_blocked_meta_key( (string) $key ) ) continue;
             $result[ $key ] = count( $values ) === 1 ? $values[0] : $values;
         }
         return $result;
