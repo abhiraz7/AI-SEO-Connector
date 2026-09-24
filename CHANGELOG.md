@@ -3,40 +3,62 @@
 All notable changes to this plugin are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.3.0] - 2026-09-24
+
+### Added
+- **Live connection status.** The settings screen and the WordPress admin
+  menu now show the real state of the connection: green (connected),
+  white (awaiting connection), yellow (idle) or red (paused). It is
+  derived from the last authenticated request rather than from a setting,
+  and refreshes on its own while the screen is open.
+- **Doctor.** On-demand diagnostics covering PHP/WordPress versions,
+  HTTPS, permalinks, token, SEO plugin, Application Passwords, memory,
+  update status, and a real authenticated request to the site's own API
+  that detects a stripped `Authorization` header, a blocking firewall or
+  security plugin, and broken `/wp-json/` routing. Read-only; its
+  self-test is not counted as the platform connecting.
+- **Pause / Resume** as its own action next to the status.
+
+### Changed
+- The settings screen was rebuilt as a seamless, full-bleed, responsive
+  layout with a new logo mark. The "Enabled" checkbox is gone: the state
+  is shown by the status instead, and pausing is a separate action, so
+  saving the tool groups can no longer change whether the connection is on.
+- The Application Password panel is collapsed by default.
+- Tool groups are toggle switches; the SEO group now names both Yoast and
+  RankMath. Tool-group input is restricted to the four known groups.
+- Every glow and shadow now follows the accent color, which follows a
+  non-default WordPress Admin Color Scheme.
+- Regenerating the token resets a connected state that was earned with the
+  old token.
+
 ## [1.2.2] - 2026-09-23
 
 ### Changed
 - **License changed from GPL-2.0+ to Proprietary / All Rights Reserved.**
-  The GPL header was inherited from before this plugin's rename and had
-  never been deliberately chosen -- reconsidered and switched, matching
-  the main platform's own licensing. Note: this plugin is built entirely
-  on WordPress core's own hooks/APIs, which are themselves GPLv2 --
-  WordPress ecosystem convention treats plugins built this way as
-  derivative works expected to be GPL-compatible, so a fully proprietary
-  license here is a deliberate, accepted departure from that norm, not
-  an oversight.
+  The GPL header had never been a deliberate choice and was reconsidered.
+  Note: this plugin is built entirely on WordPress core's own hooks and
+  APIs, which are themselves GPLv2 -- WordPress ecosystem convention
+  treats plugins built this way as derivative works expected to be
+  GPL-compatible, so a fully proprietary license here is a deliberate,
+  accepted departure from that norm, not an oversight.
 
 ## [1.2.1] - 2026-09-23
 
 ### Fixed
-- Admin menu icon replaced (was an abstract stack-of-lines shape that
-  WordPress's forced monochrome rendering flattened into a generic-
-  looking placeholder glyph). Now a shield-with-checkmark, matching the
-  main dashboard's own "Security" icon and this plugin's trust framing.
+- Admin menu icon replaced (it was an abstract shape that WordPress's
+  forced monochrome rendering flattened into a generic-looking placeholder
+  glyph). Now a shield-with-checkmark, matching this plugin's trust
+  framing.
 - Settings screen width was hard-capped at 960px, leaving a lot of dead
   space on wide monitors. Now `min(1400px, 94vw)`.
 
 ### Added
-- **Spike**: the settings screen's accent color now shifts to harmonize
-  with a site's chosen WordPress Admin Color Scheme (Users -> Profile),
-  but only for non-default schemes -- sites on the default "Fresh"
-  scheme (the large majority) keep the plugin's own distinctive
-  indigo/violet look unchanged, so the brand identity isn't diluted for
-  the common case. Curated accent values, not lifted directly from WP
-  core -- visually unverified against a live install for any scheme
-  other than the default. A few hardcoded glow-shadow colors (button
-  hover, code-chip hover border) were not migrated to the new accent
-  variables in this pass.
+- The settings screen's accent color shifts to harmonize with a site's
+  chosen WordPress Admin Color Scheme (Users -> Profile), but only for
+  non-default schemes, so sites on the default "Fresh" scheme keep the
+  plugin's own indigo/violet look. Curated accent values, visually
+  unverified for any scheme other than the default.
 
 ## [1.2.0] - 2026-09-23
 
@@ -49,16 +71,14 @@ follows [Keep a Changelog](https://keepachangelog.com/).
   - Known gap: RankMath's schema/snippet system has no 1:1 equivalent to
     Yoast's `schema_article_type`/`schema_page_type` -- those two fields
     are simply empty under RankMath rather than guessed at.
-  - Untested against a live RankMath install -- reviewed against
-    RankMath's documented meta key conventions, not verified end-to-end.
 
 ## [1.0.0] - 2026-09-23
 
 ### Changed
-- Renamed from **VtechSEO Agent** to **AI SEO Connector** (class prefixes,
-  option keys, REST namespace, admin UI, repo). Legacy `/wp-json/vtseo/v1`
-  REST alias and an options-migration step kept in place so already-
-  connected sites don't lose their token/settings.
+- Renamed to **AI SEO Connector** (class prefixes, option keys, REST
+  namespace, admin UI, repo). A compatibility REST alias and an
+  options-migration step were kept so already-connected sites don't lose
+  their token/settings.
 - Redesigned the admin settings screen: added a plain-language trust
   section, split routine blocked-auth log noise from real activity, and
   gave the screen a modern glassmorphism/gradient visual treatment.

@@ -50,6 +50,7 @@ class AISEOC_Auth {
                 return new WP_Error( 'aiseoc_forbidden', 'Invalid token.', [ 'status' => 403 ] );
             }
             self::clear_failed_attempts( $ip );
+            self::touch_last_contact( 'token', $request );
             return true;
         }
 
@@ -57,6 +58,7 @@ class AISEOC_Auth {
         if ( strpos( $header, 'Basic ' ) === 0 ) {
             if ( is_user_logged_in() && current_user_can( 'manage_options' ) ) {
                 self::clear_failed_attempts( $ip );
+                self::touch_last_contact( 'app_password', $request );
                 return true;
             }
             self::record_failed_attempt( $ip );
@@ -71,8 +73,35 @@ class AISEOC_Auth {
     public static function regenerate_token(): string {
         $token = bin2hex( random_bytes( 32 ) );
         update_option( 'aiseoc_api_token', $token );
+
+        // The new token has never been used, so a "connected" state earned
+        // with the old token no longer holds -- back to awaiting.
+        $prev = get_option( AISEOC_Status::CONTACT_OPTION );
+        if ( is_array( $prev ) && ( $prev['method'] ?? '' ) === 'token' ) {
+            delete_option( AISEOC_Status::CONTACT_OPTION );
+        }
+
         AISEOC_Logger::log( 'info', 'API token regenerated.' );
         return $token;
+    }
+
+    /**
+     * Remember when an authenticated request last succeeded, so the admin UI
+     * can show a real connection state. Writes are throttled to one per
+     * minute per method so a busy platform doesn't cause a DB write per
+     * request. The Doctor's self-test is excluded -- it is this site talking
+     * to itself, not the platform connecting.
+     */
+    private static function touch_last_contact( string $method, WP_REST_Request $request ): void {
+        if ( $request->get_header( 'X-AISEOC-Doctor' ) ) {
+            return;
+        }
+        $now  = time();
+        $prev = get_option( AISEOC_Status::CONTACT_OPTION );
+        if ( is_array( $prev ) && ( $prev['method'] ?? '' ) === $method && ( $now - (int) ( $prev['ts'] ?? 0 ) ) < 60 ) {
+            return;
+        }
+        update_option( AISEOC_Status::CONTACT_OPTION, [ 'ts' => $now, 'method' => $method ], false );
     }
 
     /**
@@ -93,9 +122,9 @@ class AISEOC_Auth {
 
         $existing = WP_Application_Passwords::get_user_application_passwords( $user_id );
         foreach ( $existing as $app ) {
-            // Matches both the current name and the old pre-rename name, so an
-            // Application Password created before the VtechSEO Agent -> AI SEO Connector
-            // rename still gets cleanly replaced instead of left orphaned.
+            // Matches the current name and the name used by earlier releases,
+            // so an Application Password created before the rename is still
+            // replaced cleanly instead of being left behind, still valid.
             if ( in_array( $app['name'], [ 'AI SEO Connector', 'VtechSEO Agent' ], true ) ) {
                 WP_Application_Passwords::delete_application_password( $user_id, $app['uuid'] );
             }

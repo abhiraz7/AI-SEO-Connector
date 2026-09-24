@@ -1,14 +1,19 @@
 <?php
 /**
  * Registers every AI SEO Connector REST endpoint under /wp-json/aiseoc/v1/
- * (plus a legacy alias under the old /wp-json/vtseo/v1/ -- see
- * register_routes() below).
+ * (plus a compatibility alias for connections made by earlier releases --
+ * see register_routes() below).
  */
 class AISEOC_Router {
 
     const NS = 'aiseoc/v1';
 
     public static function init() {}
+
+    /** The base URL the platform is given; also what the Doctor self-tests. */
+    public static function api_base(): string {
+        return get_bloginfo( 'url' ) . '/wp-json/' . self::NS;
+    }
 
     public static function register_routes() {
         $perm = [ 'AISEOC_Auth', 'permission_callback' ];
@@ -49,11 +54,10 @@ class AISEOC_Router {
             ],
         ];
 
-        // Register every route above under BOTH namespaces: the new primary
-        // 'aiseoc/v1', and 'vtseo/v1' as a legacy alias for sites still
-        // connected via the old vtseo/v1 namespace before the AI SEO Connector
-        // rename -- remove once all known connections have been re-pointed
-        // at aiseoc/v1.
+        // Register every route above under BOTH namespaces: the primary
+        // 'aiseoc/v1', plus a compatibility alias for connections made by
+        // earlier releases. The platform still calls the alias today, so it
+        // can only be removed after the platform is re-pointed at 'aiseoc/v1'.
         foreach ( [ self::NS, 'vtseo/v1' ] as $namespace ) {
             foreach ( $routes as $path => $args ) {
                 register_rest_route( $namespace, $path, $args );

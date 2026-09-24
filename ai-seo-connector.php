@@ -2,8 +2,8 @@
 /**
  * Plugin Name: AI SEO Connector
  * Plugin URI:  https://github.com/abhiraz7/AI-SEO-Connector
- * Description: Lets the VtechSEO platform read on-page SEO data and apply approved fixes (meta tags, image alt text, content) on this site. Scoped to content/SEO/media only -- no page-builder control, no plugin management, no raw PHP execution.
- * Version:     1.2.2
+ * Description: Lets your SEO platform read on-page SEO data and apply approved fixes (meta tags, image alt text, content) on this site. Scoped to content/SEO/media only -- no page-builder control, no plugin management, no raw PHP execution.
+ * Version:     1.3.0
  * Requires at least: 5.6
  * Requires PHP: 7.4
  * Author:      AI SEO Connector
@@ -14,7 +14,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'AISEOC_VERSION',    '1.2.2' );
+define( 'AISEOC_VERSION',    '1.3.0' );
 define( 'AISEOC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'AISEOC_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'AISEOC_SLUG',       'ai-seo-connector' );
@@ -24,6 +24,8 @@ require_once AISEOC_PLUGIN_DIR . 'includes/class-auth.php';
 require_once AISEOC_PLUGIN_DIR . 'includes/class-router.php';
 require_once AISEOC_PLUGIN_DIR . 'includes/class-mcp.php';
 require_once AISEOC_PLUGIN_DIR . 'includes/class-logger.php';
+require_once AISEOC_PLUGIN_DIR . 'includes/class-status.php';
+require_once AISEOC_PLUGIN_DIR . 'includes/class-doctor.php';
 require_once AISEOC_PLUGIN_DIR . 'mcp-handlers/handler-content.php';
 require_once AISEOC_PLUGIN_DIR . 'mcp-handlers/handler-seo.php';
 require_once AISEOC_PLUGIN_DIR . 'mcp-handlers/handler-media.php';
@@ -31,32 +33,25 @@ require_once AISEOC_PLUGIN_DIR . 'mcp-handlers/handler-site.php';
 require_once AISEOC_PLUGIN_DIR . 'admin/class-admin.php';
 
 /**
- * ── Legacy option migration (rename: vtechseo-agent / VtechSEO Agent → AI SEO Connector) ──
+ * ── Option migration from earlier releases ──
  *
- * Two real, already-connected WordPress sites (examnotespdf.in and
- * vseo.vtraffic.io) have their token and settings stored under the OLD
- * option names (vtseo_api_token, vtseo_enabled, etc.) from before this
- * plugin was renamed from "VtechSEO Agent" to "AI SEO Connector".
+ * Sites connected under an earlier release keep their token and settings
+ * under the old option names (the vtseo_* keys mapped below). Because the
+ * plugin folder was renamed, WordPress treats this as a brand-new plugin
+ * install and the activation hook fires fresh. add_option() is a no-op only
+ * if the option already exists, and the new aiseoc_* names never have on
+ * those sites -- so without this step add_option() would create a NEW random
+ * token and silently orphan the one the client already pasted into their
+ * platform, breaking the connection.
  *
- * Because the plugin folder itself was renamed, WordPress treats this as a
- * brand-new plugin install, not an update -- the activation hook fires
- * fresh. add_option() is a no-op if the option already exists, but the
- * NEW aiseoc_* option names have never existed on those sites, so without
- * this migration step add_option() would happily create a brand new random
- * token under aiseoc_api_token, silently orphaning the token the client
- * already has pasted into the VtechSEO dashboard and breaking their
- * connection.
+ * This copies each old value to its new name, but only if the new option is
+ * still empty/unset and an old value actually exists. On a genuinely fresh
+ * install it is a harmless no-op and add_option() below proceeds as normal.
  *
- * This copies each old vtseo_* value over to its new aiseoc_* name --
- * but only if the new option is still empty/unset and an old value
- * actually exists. On a genuinely fresh install (no vtseo_* options at
- * all) this is a harmless no-op and add_option() below proceeds as normal.
- *
- * Run on both register_activation_hook (the normal path) AND plugins_loaded
- * (belt-and-braces: some WP admin flows -- e.g. a plugin reinstall via a
- * hosting panel, or an already-active plugin file being swapped out without
- * a clean deactivate/reactivate cycle -- are not guaranteed to fire the
- * activation hook before other code reads these options).
+ * Runs on register_activation_hook (the normal path) AND plugins_loaded
+ * (belt-and-braces: some flows -- a reinstall via a hosting panel, or an
+ * already-active plugin file swapped without a clean deactivate/reactivate
+ * cycle -- are not guaranteed to fire the activation hook first).
  */
 function aiseoc_migrate_legacy_options(): void {
     $map = [
@@ -90,8 +85,8 @@ function aiseoc_migrate_legacy_options(): void {
 register_activation_hook( __FILE__, function () {
     // Migrate BEFORE the add_option() calls below, so a site reinstalling
     // under the new plugin name keeps its existing token/settings instead
-    // of silently getting a fresh token that breaks its VtechSEO dashboard
-    // connection. See aiseoc_migrate_legacy_options() docblock above.
+    // of silently getting a fresh token that breaks its connection. See the
+    // aiseoc_migrate_legacy_options() docblock above.
     aiseoc_migrate_legacy_options();
 
     // add_option() is a no-op if the option already exists, so this can safely
@@ -140,7 +135,7 @@ add_action( 'rest_api_init', function () {
  */
 if ( file_exists( AISEOC_PLUGIN_DIR . 'vendor/plugin-update-checker/plugin-update-checker.php' ) ) {
     require AISEOC_PLUGIN_DIR . 'vendor/plugin-update-checker/plugin-update-checker.php';
-    $aiseocUpdateChecker = YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
+    $GLOBALS['aiseoc_update_checker'] = $aiseocUpdateChecker = YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
         'https://github.com/abhiraz7/AI-SEO-Connector/',
         __FILE__,
         'ai-seo-connector'
