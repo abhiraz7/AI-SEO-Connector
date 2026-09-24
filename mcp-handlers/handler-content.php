@@ -33,7 +33,7 @@ class AISEOC_Content {
             $args['post_name'] = sanitize_title( $p['slug'] );
         }
 
-        $post_id = wp_insert_post( $args, true );
+        $post_id = self::save_post( $args );
         if ( is_wp_error( $post_id ) ) throw new Exception( $post_id->get_error_message() );
 
         if ( ! empty( $p['meta'] ) && is_array( $p['meta'] ) ) {
@@ -63,14 +63,19 @@ class AISEOC_Content {
         if ( isset( $p['content'] ) ) $args['post_content'] = wp_kses_post( $p['content'] );
         if ( isset( $p['excerpt'] ) ) $args['post_excerpt'] = sanitize_textarea_field( $p['excerpt'] );
         if ( isset( $p['slug'] ) )    $args['post_name']    = sanitize_title( $p['slug'] );
-        if ( isset( $p['date'] ) )    $args['post_date']    = sanitize_text_field( $p['date'] );
+        if ( isset( $p['date'] ) ) {
+            $args['post_date']     = sanitize_text_field( $p['date'] );
+            $args['post_date_gmt'] = get_gmt_from_date( $args['post_date'] );
+            // Without edit_date, WordPress discards a new date on drafts.
+            $args['edit_date']     = true;
+        }
 
         if ( isset( $p['status'] ) ) {
             $status = sanitize_key( $p['status'] );
             $args['post_status'] = in_array( $status, self::ALLOWED_STATUSES, true ) ? $status : 'draft';
         }
 
-        $result = wp_update_post( $args, true );
+        $result = self::save_post( $args );
         if ( is_wp_error( $result ) ) throw new Exception( $result->get_error_message() );
 
         if ( ! empty( $p['meta'] ) ) {
@@ -163,12 +168,15 @@ class AISEOC_Content {
         $date    = sanitize_text_field( $p['date'] ?? '' );
         if ( ! $post_id || ! $date ) throw new Exception( 'post_id and date required.' );
 
-        $result = wp_update_post( [
+        $result = self::save_post( [
             'ID'            => $post_id,
             'post_status'   => 'future',
             'post_date'     => $date,
             'post_date_gmt' => get_gmt_from_date( $date ),
-        ], true );
+            // Without edit_date, WordPress discards the date on a draft and
+            // publishes it immediately instead of scheduling it.
+            'edit_date'     => true,
+        ] );
 
         if ( is_wp_error( $result ) ) throw new Exception( $result->get_error_message() );
         AISEOC_Logger::log( 'info', "Scheduled post #{$post_id} for {$date}" );
@@ -219,6 +227,31 @@ class AISEOC_Content {
     }
 
     /* ── Helpers ─────────────────────────────────────────── */
+
+    /**
+     * Insert or update a post without re-filtering fields the caller didn't send.
+     *
+     * Token requests run with no logged-in user, so WordPress's kses filters
+     * are active for the whole request. wp_update_post() loads the existing
+     * post and saves ALL of it again, so without this the existing content
+     * would be filtered too -- silently stripping iframes, scripts and embeds
+     * the site owner added, even on a title-only change. Callers sanitize the
+     * fields they pass in; everything else is saved back exactly as it was.
+     * kses_init() puts the filters back the way WordPress had them.
+     *
+     * @return int|WP_Error Post ID, or WP_Error on failure.
+     */
+    public static function save_post( array $args ) {
+        kses_remove_filters();
+        try {
+            // wp_insert_post()/wp_update_post() expect slashed input.
+            return empty( $args['ID'] )
+                ? wp_insert_post( wp_slash( $args ), true )
+                : wp_update_post( wp_slash( $args ), true );
+        } finally {
+            kses_init();
+        }
+    }
 
     private static function get_post_terms( int $post_id ): array {
         $taxonomies = get_post_taxonomies( $post_id );

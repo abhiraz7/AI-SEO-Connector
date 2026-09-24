@@ -89,7 +89,7 @@ class AISEOC_Media {
 
         if ( $alt )     update_post_meta( $attach_id, '_wp_attachment_image_alt', $alt );
         if ( $caption ) {
-            wp_update_post( [ 'ID' => $attach_id, 'post_excerpt' => $caption ] );
+            AISEOC_Content::save_post( [ 'ID' => $attach_id, 'post_excerpt' => $caption ] );
         }
 
         AISEOC_Logger::log( 'info', "Uploaded media #{$attach_id}" );
@@ -165,7 +165,7 @@ class AISEOC_Media {
         if ( isset( $p['caption'] ) )     $update['post_excerpt'] = sanitize_text_field( $p['caption'] );
         if ( isset( $p['description'] ) ) $update['post_content'] = sanitize_textarea_field( $p['description'] );
 
-        wp_update_post( $update );
+        AISEOC_Content::save_post( $update );
 
         if ( isset( $p['alt'] ) ) {
             update_post_meta( $id, '_wp_attachment_image_alt', sanitize_text_field( $p['alt'] ) );
