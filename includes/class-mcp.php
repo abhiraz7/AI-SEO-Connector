@@ -175,7 +175,7 @@ class AISEOC_MCP {
      * ════════════════════════════════════════════════════════ */
 
     private static function handle_tools_list( $id ): array {
-        $allowed = json_decode( get_option( 'aiseoc_allowed_actions', '[]' ), true );
+        $allowed = AISEOC_Router::allowed_groups();
 
         $group_map = [
             'create_post'             => 'content',
@@ -218,7 +218,7 @@ class AISEOC_MCP {
     private static function handle_tools_call( $id, array $params ): array {
         $name      = sanitize_key( $params['name'] ?? '' );
         $arguments = is_array( $params['arguments'] ?? null ) ? $params['arguments'] : [];
-        $allowed   = json_decode( get_option( 'aiseoc_allowed_actions', '[]' ), true );
+        $allowed   = AISEOC_Router::allowed_groups();
 
         AISEOC_Logger::log( 'info', "MCP tools/call: {$name}" );
 
@@ -244,50 +244,63 @@ class AISEOC_MCP {
      *  resources/list + resources/read (browse posts/pages/media)
      * ════════════════════════════════════════════════════════ */
 
+    /*
+     * Resources follow the same rules as the tools: posts/pages need the
+     * Content group, media needs the Media group, only public post types
+     * are exposed, only published (not password-protected) posts can be
+     * read, and meta goes through the same sensitive-key filter as get_post.
+     */
     private static function handle_resources_list( $id, array $params ): array {
         $cursor   = $params['cursor'] ?? null;
         $paged    = $cursor ? max( 1, intval( base64_decode( $cursor ) ) ) : 1;
         $per_page = 15;
+        $allowed  = AISEOC_Router::allowed_groups();
 
         $resources = [];
+        $posts     = [];
 
-        $posts = get_posts( [
-            'post_type'      => [ 'post', 'page' ],
-            'post_status'    => 'publish',
-            'posts_per_page' => $per_page,
-            'paged'          => $paged,
-            'orderby'        => 'modified',
-            'order'          => 'DESC',
-            'no_found_rows'  => false,
-        ] );
+        if ( in_array( 'content', $allowed, true ) ) {
+            $posts = get_posts( [
+                'post_type'      => AISEOC_Content::allowed_post_types(),
+                'post_status'    => 'publish',
+                'has_password'   => false,
+                'posts_per_page' => $per_page,
+                'paged'          => $paged,
+                'orderby'        => 'modified',
+                'order'          => 'DESC',
+                'no_found_rows'  => false,
+            ] );
 
-        foreach ( $posts as $post ) {
-            $snippet = wp_strip_all_tags( $post->post_excerpt ?: $post->post_content );
-            $resources[] = [
-                'uri'         => "wp://{$post->post_type}/{$post->ID}",
-                'name'        => $post->post_title ?: "(#{$post->ID})",
-                'description' => wp_trim_words( $snippet, 20 ),
-                'mimeType'    => 'application/json',
-            ];
+            foreach ( $posts as $post ) {
+                $snippet = wp_strip_all_tags( $post->post_excerpt ?: $post->post_content );
+                $resources[] = [
+                    'uri'         => "wp://{$post->post_type}/{$post->ID}",
+                    'name'        => $post->post_title ?: "(#{$post->ID})",
+                    'description' => wp_trim_words( $snippet, 20 ),
+                    'mimeType'    => 'application/json',
+                ];
+            }
         }
 
-        $media = get_posts( [
-            'post_type'      => 'attachment',
-            'post_status'    => 'inherit',
-            'posts_per_page' => 8,
-            'paged'          => $paged,
-            'orderby'        => 'modified',
-            'order'          => 'DESC',
-        ] );
+        if ( in_array( 'media', $allowed, true ) ) {
+            $media = get_posts( [
+                'post_type'      => 'attachment',
+                'post_status'    => 'inherit',
+                'posts_per_page' => 8,
+                'paged'          => $paged,
+                'orderby'        => 'modified',
+                'order'          => 'DESC',
+            ] );
 
-        foreach ( $media as $item ) {
-            $mime = get_post_mime_type( $item->ID ) ?: 'application/octet-stream';
-            $file = get_attached_file( $item->ID );
-            $resources[] = [
-                'uri'      => "wp://media/{$item->ID}",
-                'name'     => $item->post_title ?: ( $file ? basename( $file ) : "media-{$item->ID}" ),
-                'mimeType' => $mime,
-            ];
+            foreach ( $media as $item ) {
+                $mime = get_post_mime_type( $item->ID ) ?: 'application/octet-stream';
+                $file = get_attached_file( $item->ID );
+                $resources[] = [
+                    'uri'      => "wp://media/{$item->ID}",
+                    'name'     => $item->post_title ?: ( $file ? basename( $file ) : "media-{$item->ID}" ),
+                    'mimeType' => $mime,
+                ];
+            }
         }
 
         $result = [ 'resources' => $resources ];
@@ -299,18 +312,22 @@ class AISEOC_MCP {
     }
 
     private static function handle_resource_read( $id, array $params ): array {
-        $uri = $params['uri'] ?? '';
+        $uri = (string) ( $params['uri'] ?? '' );
 
-        if ( ! preg_match( '#^wp://([^/]+)/(\d+)$#', $uri, $m ) ) {
-            return self::make_error( $id, -32602, "Invalid resource URI: {$uri}. Expected wp://type/id" );
+        if ( ! preg_match( '#^wp://([a-z0-9_-]+)/(\d+)$#', $uri, $m ) ) {
+            return self::make_error( $id, -32602, 'Invalid resource URI. Expected wp://type/id' );
         }
 
         $type    = $m[1];
         $post_id = intval( $m[2] );
+        $allowed = AISEOC_Router::allowed_groups();
+        $post    = get_post( $post_id );
 
         if ( $type === 'media' ) {
-            $post = get_post( $post_id );
-            if ( ! $post ) {
+            if ( ! in_array( 'media', $allowed, true ) ) {
+                return self::make_error( $id, -32602, "Tool group 'media' is disabled. Enable it in AI SEO Connector settings." );
+            }
+            if ( ! $post || $post->post_type !== 'attachment' ) {
                 return self::make_error( $id, -32602, "Media not found: {$post_id}" );
             }
             $data = wp_json_encode( [
@@ -329,13 +346,20 @@ class AISEOC_MCP {
             ] ] ] );
         }
 
-        $post = get_post( $post_id );
-        if ( ! $post ) {
+        if ( ! in_array( 'content', $allowed, true ) ) {
+            return self::make_error( $id, -32602, "Tool group 'content' is disabled. Enable it in AI SEO Connector settings." );
+        }
+
+        // Anything that isn't a published, non-password-protected post of a
+        // public type is reported as not found, without saying why.
+        if ( ! $post
+            || $post->post_type !== $type
+            || ! in_array( $post->post_type, AISEOC_Content::allowed_post_types(), true )
+            || $post->post_status !== 'publish'
+            || $post->post_password !== '' ) {
             return self::make_error( $id, -32602, "Post not found: {$post_id}" );
         }
 
-        $raw_meta  = get_post_meta( $post_id );
-        $flat_meta = array_map( fn( $v ) => count( $v ) === 1 ? $v[0] : $v, $raw_meta );
         $terms_out = [];
         foreach ( get_post_taxonomies( $post ) as $tax ) {
             $t = wp_get_post_terms( $post_id, $tax );
@@ -357,7 +381,7 @@ class AISEOC_MCP {
             'url'      => get_permalink( $post_id ),
             'slug'     => $post->post_name,
             'terms'    => $terms_out,
-            'meta'     => $flat_meta,
+            'meta'     => AISEOC_Content::safe_post_meta( $post_id ),
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
 
         return self::make_result( $id, [ 'contents' => [ [
@@ -477,7 +501,7 @@ Steps:
         if ( defined( 'WPSEO_VERSION' ) )     $parts[] = 'Yoast SEO active.';
         if ( defined( 'RANK_MATH_VERSION' ) ) $parts[] = 'RankMath active (this plugin only reads/writes Yoast meta keys today -- RankMath fields are not yet supported).';
 
-        $allowed = json_decode( get_option( 'aiseoc_allowed_actions', '[]' ), true );
+        $allowed = AISEOC_Router::allowed_groups();
         $parts[] = 'Enabled groups: ' . implode( ', ', $allowed ) . '.';
         $parts[] = 'Use resources/list to browse posts/pages/media. Use prompts/list for workflow templates.';
         $parts[] = 'Writes to a post clear the caches for that post (WordPress object cache plus supported page-cache plugins) and report them in caches_purged. After bulk or media changes, call flush_cache. CDN/edge caches such as Cloudflare are not cleared.';
@@ -635,7 +659,7 @@ Steps:
             self::tool( 'list_plugins', 'List installed plugins with name, version, and active status. Read-only -- cannot install/activate/deactivate.', [
                 'active_only' => self::b( 'If true, return only active plugins.' ),
             ] ),
-            self::tool( 'get_options', 'Read specific wp_options by key. Sensitive keys (auth salts, this plugin\'s own token, etc.) are always blocked and returned as "[blocked]".', [
+            self::tool( 'get_options', 'Read specific wp_options by key. Only a short list of site-setting keys can be read (show_on_front, page_on_front, page_for_posts, blogname, blogdescription, permalink_structure, timezone_string, gmt_offset, blog_public); every other key is returned as "[blocked]".', [
                 'keys' => self::arr( 'Option key names to read.' ),
             ] ),
             self::tool( 'flush_cache', 'Clear caches so a fix shows up: the WordPress object cache plus the page cache of supported cache plugins (WP Rocket, LiteSpeed, W3 Total Cache, WP Super Cache, WP Fastest Cache, SiteGround). Returns which caches were cleared. CDN/edge caches are not included.', [

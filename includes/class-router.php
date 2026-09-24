@@ -10,6 +10,17 @@ class AISEOC_Router {
 
     public static function init() {}
 
+    /**
+     * Enabled tool groups. Normally stored as a JSON string, but tolerate an
+     * array too (e.g. written by an import tool or WP-CLI) instead of
+     * letting json_decode() fatal on every API call.
+     */
+    public static function allowed_groups(): array {
+        $raw = get_option( 'aiseoc_allowed_actions', '[]' );
+        $val = is_array( $raw ) ? $raw : json_decode( (string) $raw, true );
+        return is_array( $val ) ? array_values( array_filter( $val, 'is_string' ) ) : [];
+    }
+
     /** The base URL the platform is given; also what the Doctor self-tests. */
     public static function api_base(): string {
         return get_bloginfo( 'url' ) . '/wp-json/' . self::NS;
@@ -90,7 +101,7 @@ class AISEOC_Router {
         $body    = $request->get_json_params();
         $tool    = sanitize_key( $body['tool'] ?? '' );
         $params  = $body['params'] ?? [];
-        $allowed = json_decode( get_option( 'aiseoc_allowed_actions', '[]' ), true );
+        $allowed = self::allowed_groups();
 
         AISEOC_Logger::log( 'info', "Tool called: {$tool}" );
 
@@ -190,7 +201,7 @@ class AISEOC_Router {
             /* ── Site ── */
             [ 'name' => 'get_site_info',          'group' => 'site', 'description' => 'Get WordPress site info: name, URL, version, active theme, post/user/media counts.' ],
             [ 'name' => 'list_plugins',           'group' => 'site', 'description' => 'List installed plugins (name, version, active status) -- read-only, no install/activate/deactivate.' ],
-            [ 'name' => 'get_options',             'group' => 'site', 'description' => 'Read specific wp_options by key -- sensitive keys (auth salts, active_plugins, the API token itself, etc.) are always blocked.' ],
+            [ 'name' => 'get_options',             'group' => 'site', 'description' => 'Read specific wp_options by key. Only a short list of site-setting keys can be read (e.g. show_on_front, page_on_front, blogname, permalink_structure); every other key is returned as [blocked].' ],
             [ 'name' => 'flush_cache',             'group' => 'site', 'description' => 'Clear the object cache and supported page caches, for one post (post_id) or the whole site. Returns which caches were cleared.' ],
         ];
     }
