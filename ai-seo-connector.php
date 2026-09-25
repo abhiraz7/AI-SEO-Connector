@@ -3,7 +3,7 @@
  * Plugin Name: AI SEO Connector
  * Plugin URI:  https://github.com/abhiraz7/AI-SEO-Connector
  * Description: Lets your SEO platform read on-page SEO data and apply approved fixes (meta tags, image alt text, content) on this site. Scoped to content/SEO/media only -- no page-builder control, no plugin management, no raw PHP execution.
- * Version:     1.4.0
+ * Version:     1.5.0
  * Requires at least: 5.6
  * Requires PHP: 7.4
  * Author:      AI SEO Connector
@@ -14,7 +14,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'AISEOC_VERSION',    '1.4.0' );
+define( 'AISEOC_VERSION',    '1.5.0' );
 define( 'AISEOC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'AISEOC_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'AISEOC_SLUG',       'ai-seo-connector' );
