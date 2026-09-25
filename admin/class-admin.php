@@ -7,7 +7,6 @@ class AISEOC_Admin {
     public static function init(): void {
         add_action( 'admin_menu',                     [ __CLASS__, 'add_menu' ] );
         add_action( 'admin_head',                     [ __CLASS__, 'print_menu_dot_css' ] );
-        add_filter( 'admin_body_class',               [ __CLASS__, 'body_class' ] );
         add_action( 'wp_ajax_aiseoc_save',            [ __CLASS__, 'ajax_save' ] );
         add_action( 'wp_ajax_aiseoc_regen',           [ __CLASS__, 'ajax_regen_token' ] );
         add_action( 'wp_ajax_aiseoc_clear_logs',      [ __CLASS__, 'ajax_clear_logs' ] );
@@ -37,23 +36,15 @@ class AISEOC_Admin {
      * settings screen can update it live without a reload.
      */
     public static function print_menu_dot_css(): void {
-        $rgb   = [ 'green' => '52,211,153', 'yellow' => '251,191,36', 'red' => '248,113,113', 'white' => '229,231,235' ];
+        $rgb   = [ 'green' => '0,163,42', 'yellow' => '219,166,23', 'red' => '214,54,56', 'white' => '140,143,148' ];
         $color = AISEOC_Status::current()['color'];
         $item  = '#adminmenu li.toplevel_page_' . AISEOC_SLUG;
         echo '<style>'
            . $item . '{--aiseoc-dot-rgb:' . ( $rgb[ $color ] ?? $rgb['white'] ) . '}'
            . $item . ' .wp-menu-image{position:relative}'
            . $item . ' .wp-menu-image::after{content:"";position:absolute;top:5px;right:3px;width:8px;height:8px;border-radius:50%;'
-           . 'background:rgb(var(--aiseoc-dot-rgb));box-shadow:0 0 0 2px #1d2327,0 0 9px rgba(var(--aiseoc-dot-rgb),.85)}'
+           . 'background:rgb(var(--aiseoc-dot-rgb));box-shadow:0 0 0 2px #1d2327}'
            . '</style>';
-    }
-
-    /** Lets the settings screen restyle the surrounding WordPress chrome. */
-    public static function body_class( $classes ) {
-        if ( isset( $_GET['page'] ) && sanitize_key( wp_unslash( $_GET['page'] ) ) === AISEOC_SLUG ) {
-            $classes .= ' aiseoc-screen';
-        }
-        return $classes;
     }
 
     private static function guard(): void {
@@ -134,29 +125,10 @@ class AISEOC_Admin {
         $has_yoast    = defined( 'WPSEO_VERSION' );
         $has_rankmath = defined( 'RANK_MATH_VERSION' );
 
-        // Accent colors follow WordPress's own Admin Color Scheme, but only
-        // when the site owner deliberately picked a non-default one -- so the
-        // default look stays distinctive for the common case. Curated values
-        // (WP core's own hexes are too dark for a glow on this background);
-        // visually unverified for schemes other than the default.
-        $scheme_accents = [
-            'modern'    => [ '#3858e9', '#8b5cf6' ],
-            'blue'      => [ '#4796b3', '#06b6d4' ],
-            'coffee'    => [ '#c7a589', '#e0b088' ],
-            'ectoplasm' => [ '#a3b745', '#8b5cf6' ],
-            'midnight'  => [ '#e14d43', '#f97316' ],
-            'ocean'     => [ '#9ebaa0', '#5fa8d3' ],
-            'sunrise'   => [ '#dd823b', '#f59e0b' ],
-        ];
-        $admin_color = get_user_option( 'admin_color' );
-        [ $accent_1, $accent_2 ] = $scheme_accents[ $admin_color ] ?? [ '#6366f1', '#8b5cf6' ];
-        $accent_1_rgb = self::hex_to_rgb( $accent_1 );
-        $accent_2_rgb = self::hex_to_rgb( $accent_2 );
-
         try {
             include AISEOC_PLUGIN_DIR . 'admin/dashboard.php';
         } catch ( \Throwable $e ) {
-            echo '<div style="margin:40px;padding:20px;border:1px solid #ef4444;border-radius:8px;background:#1a1a1a;color:#f8d7da;font-family:monospace;font-size:13px">'
+            echo '<div class="notice notice-error" style="padding:12px 16px;font-family:monospace">'
                . '<strong>AI SEO Connector — dashboard error</strong><br><br>'
                . esc_html( $e->getMessage() ) . '<br>'
                . esc_html( $e->getFile() . ':' . $e->getLine() )
@@ -164,15 +136,6 @@ class AISEOC_Admin {
                . 'Check your PHP error log for the full trace.</div>';
             AISEOC_Logger::log( 'error', 'Dashboard render failed: ' . $e->getMessage() );
         }
-    }
-
-    /** "#6366f1" -> "99,102,241", for use inside rgba(var(--x-rgb), .2). */
-    private static function hex_to_rgb( string $hex ): string {
-        $hex = ltrim( $hex, '#' );
-        if ( strlen( $hex ) !== 6 || ! ctype_xdigit( $hex ) ) {
-            return '99,102,241';
-        }
-        return hexdec( substr( $hex, 0, 2 ) ) . ',' . hexdec( substr( $hex, 2, 2 ) ) . ',' . hexdec( substr( $hex, 4, 2 ) );
     }
 
     /**

@@ -3,6 +3,17 @@
 All notable changes to this plugin are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Changed
+- **Simpler settings screen.** The dark, gradient dashboard is replaced by a
+  plain WordPress-style page: status and site name at the top, then
+  Connection, Permissions and a short Tools list (Doctor, Recent activity,
+  Application password, and what this connection can and can't do). It uses
+  WordPress's own buttons and fonts, so it follows the site's admin styling.
+  No animations, glows or gradients, and no custom accent colors. Nothing
+  about how the connection works has changed.
+
 ## [1.4.0] - 2026-09-24
 
 This release fixes a bug that could damage page content, closes several
