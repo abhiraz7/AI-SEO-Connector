@@ -3,7 +3,11 @@
 All notable changes to this plugin are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [1.5.0] - 2026-09-25
+
+Includes everything in 1.4.0 (below), which was never released on its own: read
+its "Changes you might notice" section before updating a site you have
+connected other tools to.
 
 ### Changed
 - **Simpler settings screen.** The dark, gradient dashboard is replaced by a
