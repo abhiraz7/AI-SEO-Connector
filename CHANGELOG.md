@@ -3,7 +3,17 @@
 All notable changes to this plugin are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [1.6.0] - Unreleased
+## [1.6.0] - 2026-09-27
+
+### Changed
+- **SEO writes are now refused when neither Yoast SEO nor RankMath is active.**
+  Before, `yoast_set_meta` fell back to Yoast's field names on any site, so with
+  All in One SEO, SEOPress or no SEO plugin the values were stored in fields no
+  plugin reads and the call still reported success -- the change never showed on
+  the page. It now returns an error that names what was found (All in One SEO,
+  SEOPress, or none) and writes nothing. Reads (`yoast_get_meta`, `yoast_audit`)
+  are unchanged. All in One SEO and SEOPress are detected and reported, not
+  written to. The Doctor's SEO check says the same.
 
 ### Added
 - **SEO title, meta description and focus keyword for taxonomy terms** (archive
@@ -23,11 +33,24 @@ follows [Keep a Changelog](https://keepachangelog.com/).
   - Writes clear the term's cache and, for cache plugins that can purge by URL
     (WP Rocket, LiteSpeed, W3 Total Cache, WP Super Cache, SiteGround), the
     term's page. The response lists what was cleared.
-  - Existing post tools (`yoast_get_meta`, `yoast_set_meta`) are unchanged.
+  - On Yoast SEO, or with All in One SEO, SEOPress or no SEO plugin, the term
+    tools return an error and read or write nothing.
+  - The post tools are unchanged for Yoast SEO and RankMath sites.
+
+### Verified
+- On a live RankMath site: a term write changed the rendered title and
+  description immediately, an empty string removed them again exactly, Hindi
+  text stored and rendered correctly, and every refusal path (wrong taxonomy for
+  the ID, unknown field, non-string value, nothing to update, unknown taxonomy,
+  missing term, missing `term_id`) returned an error without writing.
 
 ### Not verified
-- Not yet installed on a live site at the time of writing; PHP syntax-checked
-  only. Term cache purging has not been exercised against a page-cache plugin.
+- Term cache purging against a page-cache plugin (the site tested had none
+  active).
+- The refusal messages on real All in One SEO and SEOPress sites: they are
+  detected by the constants `AIOSEO_VERSION` and `SEOPRESS_VERSION`, which have
+  not been checked against those plugins.
+- Yoast SEO term storage: deliberately unsupported until it can be verified.
 
 ## [1.5.0] - 2026-09-25
 

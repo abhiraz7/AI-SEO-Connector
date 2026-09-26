@@ -61,6 +61,29 @@ class AISEOC_SEO {
         return 'yoast';
     }
 
+    /** null when Yoast or RankMath -- the two this plugin can write to -- is
+     * active. Otherwise a name for what IS there: "All in One SEO", "SEOPress",
+     * or '' for no SEO plugin at all. Used to REFUSE writes: with neither
+     * supported plugin active, a write would be stored in fields no plugin
+     * reads -- reported as success, never shown on the page. All in One SEO and
+     * SEOPress are recognised (by the constant each defines when active) so the
+     * message can name them; they are detected and reported, not written to. */
+    private static function unsupported_seo_situation(): ?string {
+        if ( defined( 'WPSEO_VERSION' ) || defined( 'RANK_MATH_VERSION' ) ) return null;
+        if ( defined( 'AIOSEO_VERSION' ) ) return 'All in One SEO';
+        if ( defined( 'SEOPRESS_VERSION' ) ) return 'SEOPress';
+        return '';
+    }
+
+    /** Throws (a 400 to the caller) unless a supported SEO plugin is active.
+     * $done is the past-tense verb for the message: 'written', 'read or written'. */
+    private static function refuse_if_unsupported( string $done ): void {
+        $found = self::unsupported_seo_situation();
+        if ( $found === null ) return;
+        $what = $found === '' ? 'No supported SEO plugin is active' : "{$found} is active, which this plugin can't write to";
+        throw new InvalidArgumentException( "{$what} (supported: Yoast SEO, RankMath), so nothing was {$done}." );
+    }
+
     /* ── Get all SEO meta (Yoast or RankMath, whichever is active) ──── */
     public static function get_meta( array $p ): array {
         $post_id = intval( $p['post_id'] ?? 0 );
@@ -134,6 +157,8 @@ class AISEOC_SEO {
     public static function set_meta( array $p ): array {
         $post_id = intval( $p['post_id'] ?? 0 );
         if ( ! $post_id ) throw new InvalidArgumentException( 'post_id required.' );
+
+        self::refuse_if_unsupported( 'written' );
 
         $result = self::active_provider() === 'rankmath'
             ? self::set_meta_rankmath( $post_id, $p )
@@ -301,10 +326,13 @@ class AISEOC_SEO {
     }
 
     private static function require_rankmath_for_terms(): void {
+        // All in One SEO / SEOPress / no SEO plugin: refuse, naming what was found.
+        self::refuse_if_unsupported( 'read or written' );
+        // Only Yoast is left here (RankMath continues): its term storage is unverified.
         if ( self::active_provider() !== 'rankmath' ) {
             throw new InvalidArgumentException(
                 'SEO meta for taxonomy terms is only supported on RankMath so far. ' .
-                'This site is running Yoast SEO or no supported SEO plugin, so nothing was read or written.'
+                'This site is running Yoast SEO, whose term storage is not supported yet, so nothing was read or written.'
             );
         }
     }

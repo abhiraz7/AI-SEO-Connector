@@ -184,8 +184,10 @@ class AISEOC_Doctor {
         if ( defined( 'RANK_MATH_VERSION' ) ) {
             return self::result( 'seo', 'SEO plugin', 'pass', 'RankMath detected; SEO meta tools are supported.' );
         }
+        $other = defined( 'AIOSEO_VERSION' ) ? 'All in One SEO' : ( defined( 'SEOPRESS_VERSION' ) ? 'SEOPress' : '' );
+        $found = $other !== '' ? "{$other} is active, which this plugin can't write to." : 'Neither Yoast SEO nor RankMath is active.';
         return self::result( 'seo', 'SEO plugin', 'warn',
-            'Neither Yoast SEO nor RankMath is active. SEO meta writes would land in fields no plugin reads.',
+            $found . ' SEO meta writes are refused, because they would land in fields no plugin reads.',
             'Install and activate Yoast SEO or RankMath to use the SEO tool group.' );
     }
 
