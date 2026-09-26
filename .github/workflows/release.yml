@@ -1,19 +1,42 @@
 name: Release AI SEO Connector plugin zip
 
-# Fires when a version tag like v1.0.0 is pushed to this repo (the
-# ai-seo-connector/ folder's own repo at
-# github.com/abhiraz7/AI-SEO-Connector -- this workflow lives inside the
-# plugin folder specifically so it ships as part of every release).
+# Publishes a GitHub Release (and its plugin zip) in two ways:
 #
-# Builds a plugin zip and attaches it to a new GitHub Release. The
-# vendored vendor/plugin-update-checker library (see ai-seo-connector.php) reads
-# that release to power WordPress's native "update available" notice, so
-# the zip's top-level folder name and internal layout must match what a
-# normal plugin install expects.
+#   1. AUTOMATICALLY when a push to main contains a plugin version that has not
+#      been released yet. Raise `Version:` in ai-seo-connector.php and
+#      AISEOC_VERSION, add a `## [x.y.z]` entry to CHANGELOG.md, merge: the
+#      release, the tag and the zip are created here. If v<version> already
+#      exists (the normal case for a merge that does not bump the version) the
+#      run does nothing.
+#   2. MANUALLY when a version tag like v1.0.0 is pushed (the original way).
+#
+# The vendored vendor/plugin-update-checker library (see ai-seo-connector.php)
+# reads the latest release to power WordPress's native "update available" notice
+# on every connected site, so the zip's top-level folder name and internal layout
+# must match what a normal plugin install expects, and a wrong version must be
+# stopped BEFORE anything is published.
+#
+# A manual run (Actions > this workflow > Run workflow) defaults to dry_run:
+# every check runs and the zip is built, but nothing is published.
+#
+# The tag is created by the release step itself. (Tags pushed with the built-in
+# token do not start other workflows, so this cannot loop.)
 on:
   push:
+    branches: [main]
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run every check and build the zip, but publish nothing"
+        type: boolean
+        default: true
+
+# One release run at a time, so two quick merges cannot race to create the same tag.
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -24,23 +47,77 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the tag list is needed to know what is already released
 
-      - name: Check the tag matches the plugin version and CHANGELOG
+      - name: Decide whether there is a new version to release
+        id: decide
         run: |
-          # A tag that doesn't match the version inside the plugin makes every
-          # site show "update available" forever, so fail before building.
-          TAG="${GITHUB_REF_NAME#v}"
+          set -eu
           HEADER=$(sed -n -E 's/^ \* Version:[[:space:]]*([^[:space:]]+).*/\1/p' ai-seo-connector.php | head -n1 | tr -d '\r')
           CONST=$(sed -n -E "s/^define\( 'AISEOC_VERSION',[[:space:]]*'([^']+)' \);.*/\1/p" ai-seo-connector.php | head -n1 | tr -d '\r')
-          echo "tag=$TAG  header=$HEADER  AISEOC_VERSION=$CONST"
-          [ "$HEADER" = "$TAG" ] || { echo "::error::Tag $TAG does not match the plugin header Version ($HEADER)"; exit 1; }
-          [ "$CONST" = "$TAG" ]  || { echo "::error::Tag $TAG does not match AISEOC_VERSION ($CONST)"; exit 1; }
+
+          # Which version is this run about?
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            FROM="tag $GITHUB_REF_NAME"
+          else
+            VERSION="$HEADER"
+            FROM="the plugin header"
+          fi
+          TAG="v$VERSION"
+          echo "version=$VERSION (from $FROM)  header=$HEADER  AISEOC_VERSION=$CONST"
+
+          # A version that does not match the plugin's own makes every site show
+          # "update available" forever, so refuse before building anything.
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::'$VERSION' is not a plain x.y.z version."
+            exit 1
+          fi
+          [ "$HEADER" = "$VERSION" ] || { echo "::error::Version $VERSION does not match the plugin header Version ($HEADER)"; exit 1; }
+          [ "$CONST" = "$VERSION" ]  || { echo "::error::Version $VERSION does not match AISEOC_VERSION ($CONST)"; exit 1; }
 
           # Release notes come from CHANGELOG.md, so an entry is required.
-          awk -v tag="$TAG" 'index($0, "## [" tag "]") == 1 {found=1; next} found && index($0, "## [") == 1 {exit} found' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
-          [ -s "$RUNNER_TEMP/release-notes.md" ] || { echo "::error::CHANGELOG.md has no entry for $TAG"; exit 1; }
+          awk -v tag="$VERSION" 'index($0, "## [" tag "]") == 1 {found=1; next} found && index($0, "## [") == 1 {exit} found' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+          [ -s "$RUNNER_TEMP/release-notes.md" ] || { echo "::error::CHANGELOG.md has no entry for $VERSION"; exit 1; }
 
+          RELEASE=yes
+          REASON="new version $VERSION"
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then
+            if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+              RELEASE=no
+              REASON="$TAG is already released; nothing to do"
+              echo "::notice::$REASON"
+            else
+              # GitHub decides which release is "latest" by DATE, not by version
+              # number. Publishing a version lower than an existing one would make
+              # it the latest and confuse every site's update check.
+              LATEST=$(git tag -l 'v*' | sed 's/^v//' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)
+              if [ -n "$LATEST" ] && [ "$(printf '%s\n%s\n' "$LATEST" "$VERSION" | sort -V | tail -n1)" != "$VERSION" ]; then
+                echo "::error::Version $VERSION is lower than the latest release ($LATEST). Raise the version, or release the older one by hand with a tag."
+                exit 1
+              fi
+            fi
+          fi
+
+          {
+            echo "version=$VERSION"
+            echo "tag=$TAG"
+            echo "release=$RELEASE"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### Plugin release decision"
+            echo "- version: \`$VERSION\` (from $FROM)"
+            echo "- release: **$RELEASE** ($REASON)"
+            echo "- dry run: \`${DRY_RUN:-no}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'no' }}
+
+      # Also runs on a manual (dry-run) dispatch even when nothing is new, so the
+      # build itself can be tested without releasing.
       - name: Build plugin zip
+        if: steps.decide.outputs.release == 'yes' || github.event_name == 'workflow_dispatch'
         run: |
           # Zip the whole repo into a "ai-seo-connector/" top-level folder, the
           # way a real plugin install expects, while excluding repo/dev-only
@@ -61,8 +138,12 @@ jobs:
           zip -r "$GITHUB_WORKSPACE/ai-seo-connector.zip" ai-seo-connector
 
       - name: Create GitHub Release
+        if: steps.decide.outputs.release == 'yes' && (github.event_name != 'workflow_dispatch' || inputs.dry_run == false)
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.decide.outputs.tag }}
+          # Only used when the tag does not exist yet (the automatic path).
+          target_commitish: ${{ github.sha }}
           files: ai-seo-connector.zip
           # The CHANGELOG entry for this version, followed by GitHub's
           # generated list of merged pull requests.
