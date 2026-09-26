@@ -154,9 +154,23 @@ clicking "Regenerate" in the settings screen changes the token.
 
 ## Releasing an update
 
-Tag a version on this repo (e.g. `git tag v1.1.0 && git push origin v1.1.0`)
-and the `.github/workflows/release.yml` workflow builds a clean plugin zip
-and attaches it to a GitHub Release automatically. Every site running this
+Releases are automatic. To ship a new version:
+
+1. Raise `Version:` in `ai-seo-connector.php` and `AISEOC_VERSION` (they must
+   match), and add a `## [x.y.z]` entry to `CHANGELOG.md`.
+2. Merge that change to `main`.
+
+The `.github/workflows/release.yml` workflow then creates the `vx.y.z` tag,
+builds a clean plugin zip and publishes the GitHub Release. It refuses (and
+publishes nothing) if the two versions disagree, the CHANGELOG entry is
+missing, or the version is not higher than the latest release. A merge that
+does not change the version releases nothing. To rehearse, run the workflow
+by hand (Actions > Release AI SEO Connector plugin zip > Run workflow); it
+defaults to a dry run that checks everything and builds the zip without
+publishing. Pushing a tag by hand (e.g. `git tag v1.1.0 && git push origin
+v1.1.0`) still works too.
+
+Every site running this
 plugin checks for new releases here (via the vendored
 [Plugin Update Checker](https://github.com/YahnisElsts/plugin-update-checker)
 library) and shows WordPress's normal "update available" notice -- no
