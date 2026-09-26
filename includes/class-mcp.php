@@ -601,6 +601,17 @@ Steps:
                 'schema_page_type'  => self::s( 'Schema page type (Yoast only; ignored on RankMath).' ),
                 'raw'               => self::o( 'Advanced: raw meta keys to write. Keys must start with _yoast_ (Yoast) or rank_math_ (RankMath).' ),
             ], [ 'post_id' ] ),
+            self::tool( 'seo_get_term_meta', 'Get the SEO title, meta description and focus keyword of a taxonomy term (an archive page such as /subject/hindi/). Not a post: pass the taxonomy slug and the term ID. RankMath only for now; on Yoast it returns an error and reads nothing.', [
+                'taxonomy' => self::s( 'Taxonomy slug, e.g. "subject", "category", "product_cat".' ),
+                'term_id'  => self::i( 'Term ID.' ),
+            ], [ 'taxonomy', 'term_id' ] ),
+            self::tool( 'seo_set_term_meta', 'Set the SEO title, meta description and/or focus keyword of a taxonomy term (an archive page such as /subject/hindi/). Not a post: pass the taxonomy slug and the term ID. An empty string removes the custom value so RankMath falls back to its template. RankMath only for now; on Yoast it returns an error and writes nothing. Only the fields you send are changed.', [
+                'taxonomy'         => self::s( 'Taxonomy slug, e.g. "subject", "category", "product_cat".' ),
+                'term_id'          => self::i( 'Term ID.' ),
+                'seo_title'        => self::s( 'SEO title, ideally ≤60 chars. Empty string = remove.' ),
+                'meta_description' => self::s( 'Meta description, ideally ≤155 chars. Empty string = remove.' ),
+                'focus_keyword'    => self::s( 'Primary focus keyword. Empty string = remove.' ),
+            ], [ 'taxonomy', 'term_id' ] ),
             self::tool( 'yoast_audit', 'Audit a post\'s SEO basics (title and description length, focus keyword, featured image, content length) and return issues plus a score and score_percent.', [ 'post_id' => self::i( 'Post ID.' ) ], [ 'post_id' ] ),
 
             /* ── Media ── */

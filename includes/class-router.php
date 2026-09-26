@@ -193,6 +193,8 @@ class AISEOC_Router {
             'yoast_get_meta'         => [ 'AISEOC_SEO', 'get_meta',        'seo' ],
             'yoast_set_meta'         => [ 'AISEOC_SEO', 'set_meta',        'seo' ],
             'yoast_audit'            => [ 'AISEOC_SEO', 'audit_post',      'seo' ],
+            'seo_get_term_meta'      => [ 'AISEOC_SEO', 'get_term_seo',    'seo' ],
+            'seo_set_term_meta'      => [ 'AISEOC_SEO', 'set_term_seo',    'seo' ],
             /* Media */
             'upload_media'            => [ 'AISEOC_Media', 'upload',                'media' ],
             'list_media'              => [ 'AISEOC_Media', 'list_media',            'media' ],
