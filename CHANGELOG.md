@@ -3,6 +3,32 @@
 All notable changes to this plugin are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.6.0] - Unreleased
+
+### Added
+- **SEO title, meta description and focus keyword for taxonomy terms** (archive
+  pages such as `/subject/hindi/` or `/exam/dsssb-tgt/`). New tools
+  `seo_get_term_meta` and `seo_set_term_meta` take a taxonomy slug and a term
+  ID. Until now the SEO tools only worked on posts, so a term page could not be
+  fixed at all, and passing a term's ID as `post_id` would have written to an
+  unrelated post.
+  - **RankMath only for now.** On Yoast SEO, or with no supported SEO plugin,
+    both tools return an error and read or write nothing. Yoast keeps term SEO
+    in a different structure that has not been verified against a real site.
+  - Only these three fields are accepted; anything else is rejected with an
+    error instead of being silently ignored. Sending an empty string removes the
+    custom value so RankMath falls back to its template.
+  - A term ID that isn't in the given taxonomy, or a non-public taxonomy, is
+    refused.
+  - Writes clear the term's cache and, for cache plugins that can purge by URL
+    (WP Rocket, LiteSpeed, W3 Total Cache, WP Super Cache, SiteGround), the
+    term's page. The response lists what was cleared.
+  - Existing post tools (`yoast_get_meta`, `yoast_set_meta`) are unchanged.
+
+### Not verified
+- Not yet installed on a live site at the time of writing; PHP syntax-checked
+  only. Term cache purging has not been exercised against a page-cache plugin.
+
 ## [1.5.0] - 2026-09-25
 
 Includes everything in 1.4.0 (below), which was never released on its own: read

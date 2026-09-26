@@ -257,6 +257,129 @@ class AISEOC_SEO {
         return [ 'post_id' => $post_id, 'seo_plugin' => 'rankmath', 'updated_fields' => $updated ];
     }
 
+    /* ── SEO meta for taxonomy terms (archive pages such as /subject/hindi/) ──
+     *
+     * A term is not a post, so the post tools above can't reach it: passing a
+     * term's ID as post_id would write to whatever unrelated post has that ID.
+     * These tools take BOTH a taxonomy and a term_id, and refuse anything that
+     * isn't a real term of that taxonomy.
+     *
+     * RankMath only, for now. RankMath keeps term SEO in ordinary term meta, so
+     * this is update_term_meta(). Yoast keeps it in a different structure (the
+     * wpseo_taxonomy_meta option) that hasn't been verified against a real
+     * site, so on Yoast -- or with no SEO plugin -- these tools refuse with a
+     * clear message rather than guess and write to the wrong place.
+     *
+     * Only the fields verified on a live RankMath site are accepted: title and
+     * description (written, then read back from the rendered page) and focus
+     * keyword (already present in that site's termmeta table). Asking for any
+     * other field is an error, not a silent no-op.
+     */
+    const RANKMATH_TERM_FIELDS = [
+        'seo_title'        => 'rank_math_title',
+        'meta_description' => 'rank_math_description',
+        'focus_keyword'    => 'rank_math_focus_keyword',
+    ];
+
+    /** Validates taxonomy + term_id and returns the term. Throws
+     * InvalidArgumentException (a 400 to the caller) when either is wrong. */
+    private static function require_term( array $p ): WP_Term {
+        $term_id  = intval( $p['term_id'] ?? 0 );
+        $taxonomy = sanitize_key( (string) ( $p['taxonomy'] ?? '' ) );
+        if ( ! $term_id || $taxonomy === '' ) {
+            throw new InvalidArgumentException( 'taxonomy and term_id are required.' );
+        }
+        $tax = get_taxonomy( $taxonomy );
+        if ( ! $tax || ! $tax->public ) {
+            throw new InvalidArgumentException( "Taxonomy '{$taxonomy}' not found." );
+        }
+        $term = get_term( $term_id, $taxonomy );
+        if ( ! $term || is_wp_error( $term ) ) {
+            throw new InvalidArgumentException( "Term #{$term_id} not found in taxonomy '{$taxonomy}'." );
+        }
+        return $term;
+    }
+
+    private static function require_rankmath_for_terms(): void {
+        if ( self::active_provider() !== 'rankmath' ) {
+            throw new InvalidArgumentException(
+                'SEO meta for taxonomy terms is only supported on RankMath so far. ' .
+                'This site is running Yoast SEO or no supported SEO plugin, so nothing was read or written.'
+            );
+        }
+    }
+
+    public static function get_term_seo( array $p ): array {
+        $term = self::require_term( $p );
+        self::require_rankmath_for_terms();
+
+        $out = [
+            'term_id'    => $term->term_id,
+            'taxonomy'   => $term->taxonomy,
+            'name'       => $term->name,
+            'seo_plugin' => 'rankmath',
+        ];
+        $link = get_term_link( $term );
+        $out['url'] = is_wp_error( $link ) ? '' : $link;
+        foreach ( self::RANKMATH_TERM_FIELDS as $friendly => $meta_key ) {
+            $out[ $friendly ] = (string) get_term_meta( $term->term_id, $meta_key, true );
+        }
+        return $out;
+    }
+
+    public static function set_term_seo( array $p ): array {
+        $term = self::require_term( $p );
+        self::require_rankmath_for_terms();
+
+        // Reject unknown fields up front so a typo can't look like a success.
+        $unknown = array_diff( array_keys( $p ), array_merge( [ 'taxonomy', 'term_id' ], array_keys( self::RANKMATH_TERM_FIELDS ) ) );
+        if ( $unknown ) {
+            throw new InvalidArgumentException(
+                'Unsupported field(s) for term SEO: ' . implode( ', ', $unknown ) .
+                '. Supported: ' . implode( ', ', array_keys( self::RANKMATH_TERM_FIELDS ) ) . '.'
+            );
+        }
+
+        // Validate every value before writing any, so a bad one can't leave
+        // the term half updated.
+        $writes = [];
+        foreach ( self::RANKMATH_TERM_FIELDS as $friendly => $meta_key ) {
+            if ( ! array_key_exists( $friendly, $p ) ) continue;
+            if ( ! is_string( $p[ $friendly ] ) ) {
+                throw new InvalidArgumentException( "'{$friendly}' must be a string." );
+            }
+            $writes[ $friendly ] = sanitize_text_field( $p[ $friendly ] );
+        }
+        if ( ! $writes ) {
+            throw new InvalidArgumentException( 'Nothing to update: send at least one of ' . implode( ', ', array_keys( self::RANKMATH_TERM_FIELDS ) ) . '.' );
+        }
+
+        $updated = [];
+        foreach ( $writes as $friendly => $value ) {
+            $meta_key = self::RANKMATH_TERM_FIELDS[ $friendly ];
+            if ( $value === '' ) {
+                // Empty means "unset": delete the meta so RankMath falls back to
+                // its own template, exactly as if it had never been customised.
+                // This is also what a rollback to an empty before-value needs.
+                delete_term_meta( $term->term_id, $meta_key );
+            } else {
+                // wp_slash(): update_term_meta() unslashes its input, which would
+                // otherwise eat any backslash in a title or description.
+                update_term_meta( $term->term_id, $meta_key, wp_slash( $value ) );
+            }
+            $updated[] = $friendly;
+        }
+
+        AISEOC_Logger::log( 'info', "Updated RankMath SEO meta on term #{$term->term_id} ({$term->taxonomy}): " . implode( ', ', $updated ) );
+        return [
+            'term_id'        => $term->term_id,
+            'taxonomy'       => $term->taxonomy,
+            'seo_plugin'     => 'rankmath',
+            'updated_fields' => $updated,
+            'caches_purged'  => AISEOC_Cache::purge_term( $term->term_id, $term->taxonomy ),
+        ];
+    }
+
     /* ── Audit post SEO ──────────────────────────────────── */
     public static function audit_post( array $p ): array {
         $post_id = intval( $p['post_id'] ?? 0 );
